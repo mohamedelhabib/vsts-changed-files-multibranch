@@ -1,6 +1,6 @@
 # Azure DevOps Task: Changed Files
 
-![CI](https://github.com/mohamedelhabib/vsts-changed-files/workflows/CI/badge.svg?event=push)
+![CI](https://github.com/mohamedelhabib/vsts-changed-files-multibranch/actions/workflows/ci.yml/badge.svg)
 
 Pipeline task to get changed files and apply conditions according to those changes.
 This project is a fork from https://github.com/touchifyapp/vsts-changed-files.
