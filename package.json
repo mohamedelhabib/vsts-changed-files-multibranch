@@ -1,6 +1,6 @@
 {
   "name": "vsts-changed-files-multibranch",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Azure DevOps pipeline task to get changed files since last build",
   "author": "MohamedElhabib",
   "license": "MIT",
