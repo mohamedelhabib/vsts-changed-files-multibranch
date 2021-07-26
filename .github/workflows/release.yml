@@ -28,11 +28,6 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Run unit tests
-      run: npm run test -- --ci
-      env:
-        CI: true
-
     - name: Package vsix file 
       run: npm run pack
 
@@ -41,4 +36,4 @@ jobs:
       env:
         VSS_PAT: ${{ secrets.VSS_PAT }}
       run: |
-        tfx extension publish --manifest-globs vss-extension.json --vsix vsts-changed-files-multibranch.vsix --token 6vh4yssqxtmz74sgumr7t3j62lvwghy7ofapwufvazm45vni6glq
+        tfx extension publish --manifest-globs vss-extension.json --vsix vsts-changed-files-multibranch.vsix --token hpkb4wicbtcxbrs3r36vrjpfjkudw6emx6reoqxsr45mjlsou6ta
