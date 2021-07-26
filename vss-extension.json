@@ -1,10 +1,10 @@
 {
   "manifestVersion": 1,
-  "id": "vsts-changed-files",
-  "version": "1.1.2",
-  "name": "Changed files",
-  "description": "Pipeline task to get changed files since last build.",
-  "publisher": "Touchify",
+  "id": "vsts-changed-files-multibranch",
+  "version": "1.1.0",
+  "name": "Changed files Multibranch",
+  "description": "Pipeline task to get changed files and run tasks according to those changes. fork from https://github.com/touchifyapp/vsts-changed-files",
+  "publisher": "MohamedElhabib",
   "public": true,
   "icons": {
     "default": "images/icon.png",
@@ -39,23 +39,23 @@
   },
   "links": {
     "getstarted": {
-      "uri": "https://github.com/touchifyapp/vsts-changed-files"
+      "uri": "https://github.com/mohamedelhabib/vsts-changed-files-multibranch"
     },
     "support": {
-      "uri": "https://github.com/touchifyapp/vsts-changed-files/issues"
+      "uri": "https://github.com/mohamedelhabib/vsts-changed-files-multibranch/issues"
     },
     "issues": {
-      "uri": "https://github.com/touchifyapp/vsts-changed-files/issues"
+      "uri": "https://github.com/mohamedelhabib/vsts-changed-files-multibranch/issues"
     }
   },
   "repository": {
     "type": "git",
-    "uri": "https://github.com/touchifyapp/vsts-changed-files"
+    "uri": "https://github.com/mohamedelhabib/vsts-changed-files-multibranch"
   },
   "badges": [
     {
-      "href": "https://github.com/touchifyapp/vsts-changed-files/actions",
-      "uri": "https://github.com/touchifyapp/vsts-changed-files/workflows/CI/badge.svg?event=push",
+      "href": "https://github.com/mohamedelhabib/vsts-changed-files/actions",
+      "uri": "https://github.com/mohamedelhabib/vsts-changed-files/workflows/CI/badge.svg?event=push",
       "description": "Github Actions build for the project"
     }
   ],
@@ -81,7 +81,7 @@
   ],
   "contributions": [
     {
-      "id": "vsts-changed-files",
+      "id": "vsts-changed-files-multibranch",
       "type": "ms.vss-distributed-task.task",
       "targets": [
         "ms.vss-distributed-task.tasks"

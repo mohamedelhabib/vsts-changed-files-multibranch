@@ -1,17 +1,17 @@
 {
   "$schema": "https://raw.githubusercontent.com/Microsoft/azure-pipelines-task-lib/master/tasks.schema.json",
-  "id": "501f2450-cb2a-4911-9385-2e61c8808137",
-  "name": "ChangedFiles",
-  "friendlyName": "Check Changed Files",
-  "description": "Pipeline task to check if some files changed since last build",
-  "helpUrl": "https://marketplace.visualstudio.com/items?itemName=touchify.vsts-changed-files",
-  "helpMarkDown": "[More Information about this task](https://marketplace.visualstudio.com/items?itemName=touchify.vsts-changed-files)",
+  "id": "85e4cb23-720e-4547-b915-a996f214c64b",
+  "name": "ChangedFilesMultibranch",
+  "friendlyName": "Check Changed Files Multibranch",
+  "description": "Pipeline task to check if some files changed since last build and support multibranch",
+  "helpUrl": "https://marketplace.visualstudio.com/items?itemName=mohamedelhabib.vsts-changed-files-multibranch",
+  "helpMarkDown": "[More Information about this task](https://marketplace.visualstudio.com/items?itemName=mohamedelhabib.vsts-changed-files-multibranch)",
   "category": "Utility",
-  "author": "Touchify",
+  "author": "MohamedElhabib",
   "version": {
     "Major": 1,
     "Minor": 1,
-    "Patch": 2
+    "Patch": 0
   },
   "instanceNameFormat": "Check changed files: $(variable)",
   "groups": [
@@ -46,6 +46,13 @@
       "defaultValue": true,
       "required": true,
       "helpMarkDown": "Are variables available in next stages?"
+    },
+    {
+      "name": "refBranch",
+      "type": "string",
+      "label": "Reference branch",
+      "required": true,
+      "helpMarkDown": "The branch that will be used as reference to compare in case of multi branches pipeline"
     },
     {
       "name": "cwd",
