@@ -9,7 +9,7 @@ on:
         - v*
 
 jobs:
-  test:
+  publish:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,7 +22,7 @@ jobs:
         node-version: 10.x
         cache: 'npm'
 
-    - name: Install
+    - name: Install tools
       run: npm install -g tfx-cli typescript
 
     - name: Install dependencies
@@ -41,4 +41,4 @@ jobs:
       env:
         VSS_PAT: ${{ secrets.VSS_PAT }}
       run: |
-        tfx extension publish --manifest-globs vss-extension.json --vsix vsts-changed-files-multibranch.vsix --token "$VSS_PAT"
+        tfx extension publish --manifest-globs vss-extension.json --vsix vsts-changed-files-multibranch.vsix --token wrvpj24quofh5hohlwzzrx4dnjmrdi2qqqhgfxrmd4r27o5y2g6a
