@@ -36,4 +36,4 @@ jobs:
       env:
         VSS_PAT: ${{ secrets.VSS_PAT }}
       run: |
-        tfx extension publish --manifest-globs vss-extension.json --vsix vsts-changed-files-multibranch.vsix --token hpkb4wicbtcxbrs3r36vrjpfjkudw6emx6reoqxsr45mjlsou6ta
+        tfx extension publish --manifest-globs vss-extension.json --vsix vsts-changed-files-multibranch.vsix --token "${VSS_PAT}"
