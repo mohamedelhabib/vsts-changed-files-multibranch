@@ -1,6 +1,31 @@
 import * as nock from "nock";
 import { Build } from "azure-devops-node-api/interfaces/BuildInterfaces";
 
+export interface TestContext {
+    TEAM_PROJECT_ID?: string;
+    SOURCE_VERSION?: string;
+    ACCESS_TOKEN?: string;
+    DEFINITION_ID?: string;
+}
+
+export function setCommonsVariable({ TEAM_PROJECT_ID = "project", SOURCE_VERSION = "source_commit_id", ACCESS_TOKEN = "access_token", DEFINITION_ID = "500" }: TestContext = {}): TestContext {
+
+
+    setVariable("System.TeamProjectId", TEAM_PROJECT_ID);
+    setVariable("System.TeamFoundationCollectionUri", "https://dev.azure.com/orga");
+    setVariable("System.AccessToken", ACCESS_TOKEN);
+    setVariable("System.DefinitionId", DEFINITION_ID);
+    setVariable("Build.BuildId", DEFINITION_ID);
+    setVariable("Build.SourceVersion", SOURCE_VERSION);
+    setVariable("Build.SourceBranch", "master");
+    return {
+        TEAM_PROJECT_ID,
+        SOURCE_VERSION,
+        ACCESS_TOKEN,
+        DEFINITION_ID
+    };
+}
+
 export function setVariable(name: string, value: string): void {
     const key = getVariableKey(name);
     process.env[key] = value;
