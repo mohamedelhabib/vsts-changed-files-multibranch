@@ -80,6 +80,32 @@ export function mockTfsApi({ query }: { query?: Record<string, string>, build?: 
             ]
         }))
 
+        .get("/orga/project/_apis/build/builds/502/changes")
+        .query(query || true)
+        .reply(200, JSON.stringify({
+            "count": 2,
+            "value": [
+                {
+                    "id": "latest_commit_id",
+                    "message": "test commit",
+                    "type": "TfsGit",
+                    "author": {
+                        "displayName": "User name",
+                    },
+                    "timestamp": "2021-07-13T17:45:46Z"
+                },
+                {
+                    "id": "latest_commit_id_1",
+                    "message": "test commit -1",
+                    "type": "TfsGit",
+                    "author": {
+                        "displayName": "User name",
+                    },
+                    "timestamp": "2021-07-13T17:40:46Z"
+                }
+            ]
+        }))
+
         .get("/orga/project/_apis/build/builds/100/changes")
         .query(query || true)
         .reply(200, JSON.stringify({
