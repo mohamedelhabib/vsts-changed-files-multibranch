@@ -34,6 +34,7 @@ function createContext(): Context {
     const cwd = tl.getInput("cwd") || tl.cwd();
     const verbose = tl.getBoolInput("verbose");
     const refBranch = tl.getInput("refBranch", false);
+    const forceToTrue = tl.getBoolInput("forceToTrue", false);
 
     return {
         project,
@@ -42,6 +43,7 @@ function createContext(): Context {
             rules,
             isOutput,
             refBranch,
+            forceToTrue,
             cwd,
             verbose
         }
@@ -86,7 +88,7 @@ async function getChangedFiles(client: IBuildApi, { project, inputs: { cwd, verb
     return files;
 }
 
-function getChangesPerVariable(files: string[] | undefined, { inputs: { rules, variable, verbose } }: Context): Record<string, boolean> {
+function getChangesPerVariable(files: string[] | undefined, { inputs: { rules, variable, verbose, forceToTrue } }: Context): Record<string, boolean> {
     const groupedRules = parseRules(rules, variable);
     const categories = Object.keys(groupedRules).filter(cat => groupedRules[cat].length > 0);
 
@@ -95,13 +97,13 @@ function getChangesPerVariable(files: string[] | undefined, { inputs: { rules, v
     }
 
     if (!files.length) {
-        return fromEntries(categories.map(c => [c, false]));
+        return fromEntries(categories.map(c => [c, false || forceToTrue]));
     }
 
     logVerbose("> Filtering files using glob rules", { verbose });
 
     return fromEntries(
-        categories.map(cat => [cat, matchFiles(files, groupedRules[cat])])
+        categories.map(cat => [cat, forceToTrue || matchFiles(files, groupedRules[cat])])
     );
 }
 
@@ -121,6 +123,7 @@ interface Context {
         rules: string;
         isOutput: boolean;
         refBranch: string | undefined;
+        forceToTrue: boolean;
         cwd: string;
         verbose: boolean;
     };

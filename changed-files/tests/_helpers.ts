@@ -38,28 +38,28 @@ export function getVariableKey(name: string): string {
 export function mockTfsApi({ query }: { query?: Record<string, string>, build?: Partial<Build> | null } = {}): nock.Scope {
 
     return nock("https://dev.azure.com")
-    
-    // Build route template
-    .options("/orga/_apis/build")
-    .reply(200, JSON.stringify({
-        value: [
-            {
-                id: "0cd358e1-9217-4d94-8269-1c1ee6f93dcf",
-                releasedVersion: "5.1",
-                maxVersion: "5.1",
-                area: "build",
-                resourceName: "builds",
-                routeTemplate: "/{project}/_apis/{area}/{resource}"
-            },
-            {
-                id: "54572c7b-bbd3-45d4-80dc-28be08941620",
-                releasedVersion: "6.1-preview.2",
-                maxVersion: "6.1-preview.2",
-                area: "build",
-                resourceName: "builds",
-                routeTemplate: "/{project}/_apis/{area}/{resource}/{buildId}/changes"
-            }
-        ]
+
+        // Build route template
+        .options("/orga/_apis/build")
+        .reply(200, JSON.stringify({
+            value: [
+                {
+                    id: "0cd358e1-9217-4d94-8269-1c1ee6f93dcf",
+                    releasedVersion: "5.1",
+                    maxVersion: "5.1",
+                    area: "build",
+                    resourceName: "builds",
+                    routeTemplate: "/{project}/_apis/{area}/{resource}"
+                },
+                {
+                    id: "54572c7b-bbd3-45d4-80dc-28be08941620",
+                    releasedVersion: "6.1-preview.2",
+                    maxVersion: "6.1-preview.2",
+                    area: "build",
+                    resourceName: "builds",
+                    routeTemplate: "/{project}/_apis/{area}/{resource}/{buildId}/changes"
+                }
+            ]
         }))
 
         // Get build changes

@@ -119,6 +119,7 @@ jobs:
 - __variable__: The name of the default output variable to set to be available in next steps/jobs/stages. _Default:_ `HasChanged`.
 - __isOutput__: Are variables available in next stages?  _Default:_ `true`.
 - __refBranch__: The branch that will be used as reference to check changes in case multi branches pipeline.
+- __forceToTrue__: If set to true all variables will be set to true. If should be a dynamic value computed based on pipeline parameters for example.
 - __cwd__: Change the current working directory. _Default:_ `$(System.DefaultWorkingDirectory)`
 - __verbose__: Enable verbose logging. _Default:_ `false`.
 

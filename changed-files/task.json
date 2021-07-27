@@ -55,6 +55,14 @@
       "helpMarkDown": "The branch that will be used as reference to compare in case of multi branches pipeline"
     },
     {
+      "name": "forceToTrue",
+      "type": "boolean",
+      "groupName": "advanced",
+      "label": "Force to true",
+      "required": true,
+      "helpMarkDown": "If set to true all variables will be set to true. If should be a dynamic value computed based on pipeline parameters for example."
+    },
+    {
       "name": "cwd",
       "type": "filePath",
       "groupName": "advanced",
