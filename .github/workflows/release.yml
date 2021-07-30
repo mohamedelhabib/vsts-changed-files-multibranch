@@ -6,7 +6,7 @@ name: Release & publish
 on:
   create:
       tags:
-        - v*
+        - v[0-9]+.[0-9]+.[0-9]+
 
 jobs:
   publish:
