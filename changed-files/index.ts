@@ -21,7 +21,7 @@ async function run(): Promise<void> {
         setVariables(changes, context);
     }
     catch (err) {
-        tl.setResult(tl.TaskResult.Failed, err.message);
+        tl.setResult(tl.TaskResult.Failed, (err as Error).message);
     }
 }
 
