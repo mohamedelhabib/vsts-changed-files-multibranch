@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1,
   "id": "vsts-changed-files-multibranch",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "name": "Changed files Multibranch",
   "description": "Pipeline task to get changed files and run tasks according to those changes. fork from https://github.com/touchifyapp/vsts-changed-files",
   "publisher": "MohamedElhabib",
