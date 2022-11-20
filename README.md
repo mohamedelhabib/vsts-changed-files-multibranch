@@ -77,6 +77,26 @@ jobs:
         - # Add your build steps here
 ```
 
+## Exclusion file usage
+
+```yaml
+jobs: 
+  - job: check
+    displayName: Check changed files
+    pool:
+        vmImage: ubuntu-latest
+    steps:
+      - task: ChangedFiles@1
+        name: CheckChanges
+        inputs:
+          rules: |
+            [CodeChanged]
+            src/**/*.ts
+            !src/**/excludedFile.ts
+            src/**/*.html
+
+```
+
 ## Multiple branches Usage
 
 ```yaml

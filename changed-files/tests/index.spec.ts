@@ -89,6 +89,34 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
+        test("should return ignore exclusion", () => {
+            const tr = new ttm.MockTestRunner(path.join(__dirname, "05.1-glob-match.exclusion.runner.js"));
+            tr.run();
+
+            expect(tr.succeeded).toBe(true);
+
+            expect(tr.invokedToolCount).toBe(1);
+            expect(tr.warningIssues).toHaveLength(0);
+            expect(tr.errorIssues).toHaveLength(0);
+
+            expect(tr.stdout).toContain("##vso[task.setvariable variable=HasChanged;isOutput=true;]false");
+            expect(tr.stderr).toBeFalsy();
+        });
+
+        test("should return ignore exclusion and detect changes", () => {
+            const tr = new ttm.MockTestRunner(path.join(__dirname, "05.2-glob-match.exclusion.runner.js"));
+            tr.run();
+
+            expect(tr.succeeded).toBe(true);
+
+            expect(tr.invokedToolCount).toBe(1);
+            expect(tr.warningIssues).toHaveLength(0);
+            expect(tr.errorIssues).toHaveLength(0);
+
+            expect(tr.stdout).toContain("##vso[task.setvariable variable=HasChanged;isOutput=true;]true");
+            expect(tr.stderr).toBeFalsy();
+        });
+
         test("should return true if one of the changes match", () => {
             const tr = new ttm.MockTestRunner(path.join(__dirname, "06-several-build-changes.js"));
             tr.run();
