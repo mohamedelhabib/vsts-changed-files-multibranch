@@ -19,7 +19,7 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
-        test("should return true beacause of force", () => {
+        test("should return true because of force", () => {
             const tr = new ttm.MockTestRunner(path.join(__dirname, "02-force-to-true.js"));
             tr.run();
 
@@ -33,7 +33,7 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
-        test("should return true beacause of force", () => {
+        test("should return true because of force", () => {
             const tr = new ttm.MockTestRunner(path.join(__dirname, "02-no-glob-match.runner-force-to-true.js"));
             tr.run();
 
@@ -44,6 +44,25 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.errorIssues).toHaveLength(0);
 
             expect(tr.stdout).toContain("##vso[task.setvariable variable=HasChanged;isOutput=true;]true");
+            expect(tr.stderr).toBeFalsy();
+        });
+
+        test("should return TestsChanged and CodeChanged to true because of force", () => {
+            const tr = new ttm.MockTestRunner(path.join(__dirname, "02.1-force-by-category.js"));
+            tr.run();
+
+            expect(tr.succeeded).toBe(true);
+
+            expect(tr.invokedToolCount).toBe(1);
+            expect(tr.warningIssues).toHaveLength(0);
+            expect(tr.errorIssues).toHaveLength(0);
+
+            expect(tr.stdout).toContain("##vso[task.setvariable variable=CodeChanged;isOutput=true;]true");
+            expect(tr.stdout).toContain("##vso[task.setvariable variable=DocumentationChanged;isOutput=true;]true");
+            expect(tr.stdout).toContain("##vso[task.setvariable variable=TestsChanged;isOutput=true;]true");
+
+            expect(tr.stdout).not.toContain("##vso[task.setvariable variable=HasChanged;isOutput=true;]");
+
             expect(tr.stderr).toBeFalsy();
         });
 

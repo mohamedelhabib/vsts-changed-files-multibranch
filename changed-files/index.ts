@@ -25,6 +25,17 @@ async function run(): Promise<void> {
     }
 }
 
+function parseForceByCategory(str: string): Record<string, boolean> {
+    const lines = str.split(/\r?\n/).map(l => l.trim()).filter(l => !!l);
+    const res: Record<string, boolean> = {};
+    for (const line of lines) {
+        const pair = line.split(":").map(l => l.trim())
+        res[pair[0]] = (pair[1].toLowerCase() === 'true');
+        console.log(`parseForceByCategory setting ${pair[0]} to ${res[pair[0]]}`); 
+    }
+    return res;
+}
+
 function createContext(): Context {
     const project = getVariable("System.TeamProjectId");
 
@@ -36,6 +47,8 @@ function createContext(): Context {
     const refBranch = tl.getInput("refBranch", false);
     const forceToTrue = tl.getBoolInput("forceToTrue", false);
 
+    const forceByCategory = parseForceByCategory(tl.getInput("forceByCategory") || "");
+
     return {
         project,
         inputs: {
@@ -44,6 +57,7 @@ function createContext(): Context {
             isOutput,
             refBranch,
             forceToTrue,
+            forceByCategory,
             cwd,
             verbose
         }
@@ -88,7 +102,7 @@ async function getChangedFiles(client: IBuildApi, { project, inputs: { cwd, verb
     return files;
 }
 
-function getChangesPerVariable(files: string[] | undefined, { inputs: { rules, variable, verbose, forceToTrue } }: Context): Record<string, boolean> {
+function getChangesPerVariable(files: string[] | undefined, { inputs: { rules, variable, verbose, forceToTrue, forceByCategory } }: Context): Record<string, boolean> {
     const groupedRules = parseRules(rules, variable);
     const categories = Object.keys(groupedRules).filter(cat => groupedRules[cat].length > 0);
 
@@ -103,7 +117,7 @@ function getChangesPerVariable(files: string[] | undefined, { inputs: { rules, v
     logVerbose("> Filtering files using glob rules", { verbose });
 
     return fromEntries(
-        categories.map(cat => [cat, forceToTrue || matchFiles(files, groupedRules[cat])])
+        categories.map(cat => [cat, forceToTrue || forceByCategory[cat] || matchFiles(files, groupedRules[cat])])
     );
 }
 
@@ -124,6 +138,7 @@ interface Context {
         isOutput: boolean;
         refBranch: string | undefined;
         forceToTrue: boolean;
+        forceByCategory: Record<string, boolean>;
         cwd: string;
         verbose: boolean;
     };
