@@ -106,19 +106,23 @@ function getChangesPerVariable(files: string[] | undefined, { inputs: { rules, v
     const groupedRules = parseRules(rules, variable);
     const categories = Object.keys(groupedRules).filter(cat => groupedRules[cat].length > 0);
 
-    if (!files) {
-        return fromEntries(categories.map(c => [c, true]));
-    }
-
-    if (!files.length) {
-        return fromEntries(categories.map(c => [c, false || forceToTrue]));
+    if (!files || !files.length) {
+        return fromEntries(categories.map(cat => [cat, false || forceToTrue || isCategoryForced(cat, forceByCategory)]));
     }
 
     logVerbose("> Filtering files using glob rules", { verbose });
 
     return fromEntries(
-        categories.map(cat => [cat, forceToTrue || forceByCategory[cat] || matchFiles(files, groupedRules[cat])])
+        categories.map(cat => [cat, forceToTrue || isCategoryForced(cat, forceByCategory) || matchFiles(files, groupedRules[cat])])
     );
+}
+
+function isCategoryForced(category: string, forceByCategory: Record<string, boolean>):  boolean {
+    if (forceByCategory[category]) {
+        return true
+    } else {
+        return false
+    }
 }
 
 function setVariables(changes: Record<string, boolean>, { inputs: { isOutput, verbose } }: Context): void {

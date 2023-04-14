@@ -58,7 +58,7 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.errorIssues).toHaveLength(0);
 
             expect(tr.stdout).toContain("##vso[task.setvariable variable=CodeChanged;isOutput=true;]true");
-            expect(tr.stdout).toContain("##vso[task.setvariable variable=DocumentationChanged;isOutput=true;]true");
+            expect(tr.stdout).toContain("##vso[task.setvariable variable=DocumentationChanged;isOutput=true;]false");
             expect(tr.stdout).toContain("##vso[task.setvariable variable=TestsChanged;isOutput=true;]true");
 
             expect(tr.stdout).not.toContain("##vso[task.setvariable variable=HasChanged;isOutput=true;]");
@@ -66,7 +66,7 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
-        test("should return false if previous build used same sourceVersion", () => {
+        test("should return TestsChanged and CodeChanged to true because of force despite previous build used same sourceVersion", () => {
             const tr = new ttm.MockTestRunner(path.join(__dirname, "03-same-source-version.runner.js"));
             tr.run();
 
@@ -77,6 +77,24 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.errorIssues).toHaveLength(0);
 
             expect(tr.stdout).toContain("##vso[task.setvariable variable=HasChanged;isOutput=true;]false");
+            expect(tr.stderr).toBeFalsy();
+        });
+
+        test("should return false if previous build used same sourceVersion", () => {
+            const tr = new ttm.MockTestRunner(path.join(__dirname, "03-same-source-version.with-force-by-category.js"));
+            tr.run();
+
+            expect(tr.succeeded).toBe(true);
+
+            expect(tr.invokedToolCount).toBe(0);
+            expect(tr.warningIssues).toHaveLength(0);
+            expect(tr.errorIssues).toHaveLength(0);
+
+            expect(tr.stdout).toContain("##vso[task.setvariable variable=CodeChanged;isOutput=true;]true");
+            expect(tr.stdout).toContain("##vso[task.setvariable variable=DocumentationChanged;isOutput=true;]false");
+            expect(tr.stdout).toContain("##vso[task.setvariable variable=TestsChanged;isOutput=true;]true");
+
+            expect(tr.stdout).not.toContain("##vso[task.setvariable variable=HasChanged;isOutput=true;]");
             expect(tr.stderr).toBeFalsy();
         });
 
