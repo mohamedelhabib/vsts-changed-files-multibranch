@@ -11,6 +11,11 @@
 #   4. push a change to src/excluded.ts + README.md     -> Code=false            (exclusion rule)
 #   5. run with parameter shallow=true                  -> warning + Code=true Docs=true (fail-safe)
 #   6. check the job log                                -> no Node handler deprecation warning
+#   7. "scripts/create-e2e-repo.sh many-commits" then ONE push of master (65 commits,
+#      only the oldest touches src/)                    -> Code=true (false = build changes truncated, B4)
+#
+# Azure Repos: the "pr:" trigger below is ignored; PR builds need a branch policy
+# (Repos > Branches > master > Branch policies > Build validation).
 trigger:
   branches:
     include: ['*']
@@ -23,9 +28,17 @@ parameters:
   - name: shallow
     type: boolean
     default: false
+  # "Default" = self-hosted agent pool (free, no grant needed); "ubuntu-latest" = Microsoft-hosted
+  - name: agentPool
+    type: string
+    default: Default
+    values: [Default, ubuntu-latest]
 
 pool:
-  vmImage: ubuntu-latest
+  ${{ if eq(parameters.agentPool, 'ubuntu-latest') }}:
+    vmImage: ubuntu-latest
+  ${{ else }}:
+    name: ${{ parameters.agentPool }}
 
 steps:
   - checkout: self

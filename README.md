@@ -189,6 +189,8 @@ Test layers (`changed-files/tests`):
 - `scripts/verify-vsix.js`: checks the packaged extension (handlers, versions, declared inputs, runtime dependencies)
 - `scripts/run-local.sh`: runs the compiled task against a real repository and a real build
 - `e2e/azure-pipelines.yml`: end-to-end checklist pipeline for a test organization
+- `scripts/create-e2e-repo.sh`: creates the local e2e test repository (and `many-commits` for the >50 commits check)
+- `scripts/upload-dev-task.sh`: uploads the current build of the task to a test organization (no Marketplace)
 
 The tests run with the current Node version when it is a task handler version (20 or 24), offline.
 
