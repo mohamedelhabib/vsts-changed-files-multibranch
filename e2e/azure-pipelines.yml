@@ -1,8 +1,8 @@
 # End-to-end checklist pipeline for a TEST Azure DevOps organization.
 #
 # Setup (once): import this repository (or any repo with src/ and docs/ folders) in the test org,
-# install the dev build of the extension (tfx build tasks upload / private extension), then create
-# a pipeline from this file.
+# install the dev build of the extension (tfx build tasks upload / scripts/upload-dev-task.sh),
+# then create a pipeline from this file.
 #
 # Scenarios to run and expected values (see the "Report" step):
 #   1. push one commit touching src/ on master          -> Code=true  Docs=false
@@ -28,24 +28,17 @@ parameters:
   - name: shallow
     type: boolean
     default: false
-  # "Default" = self-hosted agent pool (free, no grant needed); "ubuntu-latest" = Microsoft-hosted
-  - name: agentPool
-    type: string
-    default: Default
-    values: [Default, ubuntu-latest]
 
 pool:
-  ${{ if eq(parameters.agentPool, 'ubuntu-latest') }}:
-    vmImage: ubuntu-latest
-  ${{ else }}:
-    name: ${{ parameters.agentPool }}
+  vmImage: ubuntu-latest
 
 steps:
-  - checkout: self
-    ${{ if eq(parameters.shallow, true) }}:
-      fetchDepth: 1
-    ${{ else }}:
-      fetchDepth: 0
+  - ${{ if eq(parameters.shallow, true) }}:
+      - checkout: self
+        fetchDepth: 1
+  - ${{ if eq(parameters.shallow, false) }}:
+      - checkout: self
+        fetchDepth: 0
 
   - task: ChangedFilesMultibranch@2
     name: cf
