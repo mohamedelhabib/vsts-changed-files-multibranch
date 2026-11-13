@@ -96,7 +96,7 @@ function getChangesPerVariable(files: string[] | undefined, { inputs: { rules, v
     const categories = Object.keys(groupedRules).filter(cat => groupedRules[cat].length > 0);
 
     if (!files || !files.length) {
-        return fromEntries(categories.map(cat => [cat, false || forceToTrue || isCategoryForced(cat, forceByCategory)]));
+        return fromEntries(categories.map(cat => [cat, forceToTrue || isCategoryForced(cat, forceByCategory)]));
     }
 
     logVerbose("> Filtering files using glob rules", { verbose });

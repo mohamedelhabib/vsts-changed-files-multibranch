@@ -1,39 +1,38 @@
-# This workflow will do a clean install of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
-
 name: Release & publish
 
 on:
-  create:
-      tags:
-        - v[0-9]+.[0-9]+.[0-9]+
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   publish:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
 
-    - uses: actions/checkout@v2
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
 
-    - name: Use Node.js 10.x
-      uses: actions/setup-node@v2
-      with:
-        node-version: 10.x
-        cache: 'npm'
+      - name: Install tools
+        run: npm install -g tfx-cli
 
-    - name: Install tools
-      run: npm install -g tfx-cli typescript
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Install dependencies
-      run: npm ci
-    
-    - name: Package vsix file 
-      run: npm run pack
+      - name: Package vsix file
+        run: npm run pack
 
-    - name: Publish extension
-      shell: bash
-      env:
-        VSS_PAT: ${{ secrets.VSS_PAT }}
-      run: |
-        tfx extension publish --manifest-globs vss-extension.json --vsix vsts-changed-files-multibranch.vsix --token "${VSS_PAT}"
+      - name: Verify vsix content
+        run: node scripts/verify-vsix.js vsts-changed-files-multibranch.vsix
+
+      - name: Publish extension
+        shell: bash
+        env:
+          VSS_PAT: ${{ secrets.VSS_PAT }}
+        run: |
+          tfx extension publish --manifest-globs vss-extension.json --vsix vsts-changed-files-multibranch.vsix --token "${VSS_PAT}"

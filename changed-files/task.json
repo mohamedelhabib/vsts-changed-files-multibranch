@@ -79,7 +79,10 @@
     }
   ],
   "execution": {
-    "Node10": {
+    "Node24": {
+      "target": "index.js"
+    },
+    "Node20_1": {
       "target": "index.js"
     }
   }
