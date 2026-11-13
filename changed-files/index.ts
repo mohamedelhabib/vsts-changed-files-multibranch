@@ -3,7 +3,7 @@ import * as tl from "azure-pipelines-task-lib/task";
 import type { IBuildApi } from "azure-devops-node-api/BuildApi";
 
 import { getCommitsChangedFiles, listChangedFilesBetweenBranches } from "./lib/git-diff";
-import { parseRules } from "./lib/parser";
+import { parseRules, parseForceByCategory } from "./lib/parser";
 import { matchFiles } from "./lib/matcher";
 import { getBuildChanges, createClient } from "./lib/builds";
 import { getVariable, setVariable, fromEntries, logVerbose } from "./lib/util";
@@ -23,17 +23,6 @@ async function run(): Promise<void> {
     catch (err) {
         tl.setResult(tl.TaskResult.Failed, (err as Error).message);
     }
-}
-
-function parseForceByCategory(str: string): Record<string, boolean> {
-    const lines = str.split(/\r?\n/).map(l => l.trim()).filter(l => !!l);
-    const res: Record<string, boolean> = {};
-    for (const line of lines) {
-        const pair = line.split(":").map(l => l.trim())
-        res[pair[0]] = (pair[1].toLowerCase() === 'true');
-        console.log(`parseForceByCategory setting ${pair[0]} to ${res[pair[0]]}`); 
-    }
-    return res;
 }
 
 function createContext(): Context {
