@@ -1,0 +1,53 @@
+# End-to-end checklist pipeline for a TEST Azure DevOps organization.
+#
+# Setup (once): import this repository (or any repo with src/ and docs/ folders) in the test org,
+# install the dev build of the extension (tfx build tasks upload / private extension), then create
+# a pipeline from this file.
+#
+# Scenarios to run and expected values (see the "Report" step):
+#   1. push one commit touching src/ on master          -> Code=true  Docs=false
+#   2. push a feature branch touching docs/ only        -> Code=false Docs=true  (diff vs origin/master)
+#   3. open a PR from that branch into master           -> Code=false Docs=true
+#   4. push a change to src/excluded.ts + README.md     -> Code=false            (exclusion rule)
+#   5. run with parameter shallow=true                  -> warning + Code=true Docs=true (fail-safe)
+#   6. check the job log                                -> no Node handler deprecation warning
+trigger:
+  branches:
+    include: ['*']
+
+pr:
+  branches:
+    include: [master]
+
+parameters:
+  - name: shallow
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    ${{ if eq(parameters.shallow, true) }}:
+      fetchDepth: 1
+    ${{ else }}:
+      fetchDepth: 0
+
+  - task: ChangedFilesMultibranch@2
+    name: cf
+    inputs:
+      refBranch: origin/master
+      verbose: true
+      rules: |
+        [Code]
+        src/**
+        !src/excluded.ts
+        [Docs]
+        docs/**
+
+  - script: |
+      echo "Build.SourceBranch = $(Build.SourceBranch)"
+      echo "Code = $(cf.Code)"
+      echo "Docs = $(cf.Docs)"
+    displayName: Report

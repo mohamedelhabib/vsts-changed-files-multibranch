@@ -1,6 +1,6 @@
 {
   "name": "vsts-changed-files-multibranch",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Azure DevOps pipeline task to get changed files since last build",
   "author": "MohamedElhabib",
   "license": "MIT",
@@ -25,7 +25,8 @@
     "pack:clean": "rm changed-files/package.json && rm changed-files/package-lock.json && rm -r changed-files/node_modules",
     "preversion": "npm test",
     "version": "node scripts/version.js && git add package-lock.json package.json changed-files/task.json vss-extension.json",
-    "postversion": "git push && git push --tags"
+    "postversion": "git push && git push --tags",
+    "verify": "npm run pack && node scripts/verify-vsix.js vsts-changed-files-multibranch.vsix"
   },
   "dependencies": {
     "azure-devops-node-api": "^15.1.3",

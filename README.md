@@ -28,7 +28,7 @@ jobs:
     pool:
         vmImage: ubuntu-latest
     steps:
-      - task: ChangedFiles@1
+      - task: ChangedFilesMultibranch@2
         name: CheckChanges
         inputs:
           rules: src/**/*.ts
@@ -51,7 +51,7 @@ jobs:
     pool:
         vmImage: ubuntu-latest
     steps:
-      - task: ChangedFiles@1
+      - task: ChangedFilesMultibranch@2
         name: CheckChanges
         inputs:
           rules: |
@@ -86,7 +86,7 @@ jobs:
     pool:
         vmImage: ubuntu-latest
     steps:
-      - task: ChangedFiles@1
+      - task: ChangedFilesMultibranch@2
         name: CheckChanges
         inputs:
           rules: |
@@ -97,7 +97,13 @@ jobs:
 
 ```
 
+A category is `true` when at least one changed file matches an include rule **and** no exclusion rule (`!pattern`).
+Exclusions can be written anywhere in the category. Files starting with a dot (e.g. `.github/...`) are not matched by `**`.
+
 ## Multiple branches Usage
+
+The reference branch must be fetched: use a full clone (`fetchDepth: 0`) on the checkout step.
+`refBranch` accepts `origin/master`, `master` or `refs/heads/master`.
 
 ```yaml
 jobs: 
@@ -106,7 +112,9 @@ jobs:
     pool:
         vmImage: ubuntu-latest
     steps:
-      - task: ChangedFiles@1
+      - checkout: self
+        fetchDepth: 0
+      - task: ChangedFilesMultibranch@2
         name: CheckChanges
         inputs:
           refBranch: "origin/master"
@@ -140,8 +148,14 @@ jobs:
 - __isOutput__: Are variables available in next stages?  _Default:_ `true`.
 - __refBranch__: The branch that will be used as reference to check changes in case multi branches pipeline.
 - __forceToTrue__: If set to true all variables will be set to true. If should be a dynamic value computed based on pipeline parameters for example.
+- __forceByCategory__: One `Category: true|false` per line to force some variables to true. Invalid lines are ignored with a warning.
 - __cwd__: Change the current working directory. _Default:_ `$(System.DefaultWorkingDirectory)`
 - __verbose__: Enable verbose logging. _Default:_ `false`.
+
+## Requirements & behavior
+
+- Runs on the `Node24` handler, with `Node20_1` as fallback for older agents (the deprecated `Node10` handler was removed in 2.6.0).
+- **Fail-safe**: when changed files cannot be computed (shallow clone, unknown reference branch or commit), the task logs a warning and sets **all variables to `true`**, so downstream jobs run instead of being silently skipped.
 
 ## License
 
@@ -158,6 +172,25 @@ jobs:
 - [x] git cherry-pick
 - [x] git rebase and push force
 - [x] git revert
+
+## Development
+
+```shell
+npm ci
+npm test              # lint + build + all tests (unit, real git, task scenarios)
+npm run verify        # npm test + package the vsix + verify its content (needs tfx-cli)
+```
+
+Test layers (`changed-files/tests`):
+
+- `unit.spec.ts`: rules parsing, glob matching, branch normalization
+- `git.spec.ts`: real git repositories created in a temp dir (merges, renames, shallow clones, non-ASCII paths)
+- `index.spec.ts`, `scenarios.spec.ts`: the compiled task run through `azure-pipelines-task-lib` `MockTestRunner` (mocked git + Azure DevOps API)
+- `scripts/verify-vsix.js`: checks the packaged extension (handlers, versions, declared inputs, runtime dependencies)
+- `scripts/run-local.sh`: runs the compiled task against a real repository and a real build
+- `e2e/azure-pipelines.yml`: end-to-end checklist pipeline for a test organization
+
+The tests run with the current Node version when it is a task handler version (20 or 24), offline.
 
 ## Release new version
 

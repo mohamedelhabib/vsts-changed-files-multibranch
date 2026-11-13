@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1,
   "id": "vsts-changed-files-multibranch",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "name": "Changed files Multibranch",
   "description": "Pipeline task to get changed files and run tasks according to those changes. fork from https://github.com/touchifyapp/vsts-changed-files",
   "publisher": "MohamedElhabib",
@@ -54,8 +54,8 @@
   },
   "badges": [
     {
-      "href": "https://github.com/mohamedelhabib/vsts-changed-files/actions",
-      "uri": "https://github.com/mohamedelhabib/vsts-changed-files/workflows/CI/badge.svg?event=push",
+      "href": "https://github.com/mohamedelhabib/vsts-changed-files-multibranch/actions",
+      "uri": "https://github.com/mohamedelhabib/vsts-changed-files-multibranch/actions/workflows/ci.yml/badge.svg",
       "description": "Github Actions build for the project"
     }
   ],
