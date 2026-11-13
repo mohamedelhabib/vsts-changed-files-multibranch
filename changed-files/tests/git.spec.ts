@@ -3,7 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
 
-import { getCommitChangedFiles, getCommitsChangedFiles, listChangedFilesBetweenBranches } from "../lib/git-diff";
+import { GitCommandError, getCommitChangedFiles, getCommitsChangedFiles, listChangedFilesBetweenBranches } from "../lib/git-diff";
 
 /*
  * L3 - integration tests against REAL git repositories created in a temp dir.
@@ -115,20 +115,19 @@ describe("getCommitChangedFiles (real git)", () => {
         expect(getCommitChangedFiles(sha, { cwd: repo })).toEqual(["my dir/my file.ts"]);
     });
 
-    test("CHARACTERIZATION: Should_ReturnQuotedPath_When_NonAsciiFileName", () => {
+    test("Should_ReturnVerbatimPath_When_NonAsciiFileName", () => {
         const repo = newRepo();
         commit(repo, "c1", ["a.txt"]);
         const sha = commit(repo, "c2", ["src/café.ts"]);
 
-        // git core.quotePath=true (default) escapes non-ASCII -> globs like src/** will not match
-        expect(getCommitChangedFiles(sha, { cwd: repo })).toEqual(['"src/caf\\303\\251.ts"']);
+        expect(getCommitChangedFiles(sha, { cwd: repo })).toEqual(["src/café.ts"]);
     });
 
-    test("CHARACTERIZATION B1: Should_ReturnEmptySilently_When_CommitUnknown", () => {
+    test("Should_ThrowGitCommandError_When_CommitUnknown (B1)", () => {
         const repo = newRepo();
         commit(repo, "c1", ["a.txt"]);
 
-        expect(getCommitChangedFiles("0123456789abcdef0123456789abcdef01234567", { cwd: repo })).toEqual([]);
+        expect(() => getCommitChangedFiles("0123456789abcdef0123456789abcdef01234567", { cwd: repo })).toThrow(GitCommandError);
     });
 
     test("Should_FlattenAllCommits_When_SeveralCommitIds", () => {
@@ -156,15 +155,15 @@ describe("listChangedFilesBetweenBranches (real git)", () => {
         expect(listChangedFilesBetweenBranches("origin/master", { cwd: clone })).toEqual([]);
     });
 
-    test("CHARACTERIZATION B1: Should_ReturnEmptySilently_When_RefBranchMissingInShallowSingleBranchClone", () => {
+    test("Should_ThrowGitCommandError_When_RefBranchMissingInShallowSingleBranchClone (B1)", () => {
         const clone = cloneAt(originWithFeature(), "feature", ["--depth", "1", "--single-branch"]);
 
-        expect(listChangedFilesBetweenBranches("origin/master", { cwd: clone })).toEqual([]);
+        expect(() => listChangedFilesBetweenBranches("origin/master", { cwd: clone })).toThrow(GitCommandError);
     });
 
-    test("CHARACTERIZATION B1: Should_ReturnEmptySilently_When_NoMergeBaseInShallowClone", () => {
+    test("Should_ThrowGitCommandError_When_NoMergeBaseInShallowClone (B1)", () => {
         const clone = cloneAt(originWithFeature(), "feature", ["--depth", "1", "--no-single-branch"]);
 
-        expect(listChangedFilesBetweenBranches("origin/master", { cwd: clone })).toEqual([]);
+        expect(() => listChangedFilesBetweenBranches("origin/master", { cwd: clone })).toThrow(GitCommandError);
     });
 });

@@ -2,9 +2,10 @@ import * as tl from "azure-pipelines-task-lib/task";
 
 import type { IBuildApi } from "azure-devops-node-api/BuildApi";
 
-import { getCommitsChangedFiles, listChangedFilesBetweenBranches } from "./lib/git-diff";
+import { GitCommandError, getCommitsChangedFiles, listChangedFilesBetweenBranches } from "./lib/git-diff";
 import { parseRules, parseForceByCategory } from "./lib/parser";
 import { matchFiles } from "./lib/matcher";
+import { isSameBranch } from "./lib/branch";
 import { getBuildChanges, createClient } from "./lib/builds";
 import { getVariable, setVariable, fromEntries, logVerbose } from "./lib/util";
 
@@ -15,8 +16,8 @@ async function run(): Promise<void> {
         const context = createContext();
         const client = await initializeClient();
 
-        const files = await getChangedFiles(client, context);
-        const changes = getChangesPerVariable(files, context);
+        const changed = await getChangedFiles(client, context);
+        const changes = getChangesPerVariable(changed, context);
 
         setVariables(changes, context);
     }
@@ -36,7 +37,10 @@ function createContext(): Context {
     const refBranch = tl.getInput("refBranch", false);
     const forceToTrue = tl.getBoolInput("forceToTrue", false);
 
-    const forceByCategory = parseForceByCategory(tl.getInput("forceByCategory") || "");
+    const forceByCategory = parseForceByCategory(
+        tl.getInput("forceByCategory") || "",
+        line => tl.warning(`forceByCategory: ignoring invalid line "${line}" (expected "Category: true|false")`)
+    );
 
     return {
         project,
@@ -60,11 +64,11 @@ async function initializeClient(): Promise<IBuildApi> {
     return createClient(orgUri, accessToken);
 }
 
-async function getChangedFiles(client: IBuildApi, { project, inputs: { cwd, verbose, refBranch } }: Context): Promise<string[] | undefined> {
+async function getChangedFiles(client: IBuildApi, { project, inputs: { cwd, verbose, refBranch } }: Context): Promise<ChangedFiles> {
 
     const buildId = parseInt(getVariable("Build.BuildId"));
     const commitIds: string[] = await getBuildChanges(client, project, buildId, { verbose });
-    const currentBranch: string = tl.getVariable("Build.SourceBranch")?.replace("refs/heads/", "origin/") || ""
+    const currentBranch: string = tl.getVariable("Build.SourceBranch") || "";
 
     if (verbose) {
         console.log(`Build id is ${buildId}`)
@@ -73,29 +77,44 @@ async function getChangedFiles(client: IBuildApi, { project, inputs: { cwd, verb
     }
 
     let files: string[]
-    if (refBranch !== undefined && refBranch !== currentBranch) {
-        if (verbose) {
-            console.log(`compare ${currentBranch} with the ref branch ${refBranch}...`)
+    try {
+        if (refBranch && !isSameBranch(refBranch, currentBranch)) {
+            if (verbose) {
+                console.log(`compare ${currentBranch} with the ref branch ${refBranch}...`)
+            }
+            files = listChangedFilesBetweenBranches(refBranch, { cwd, verbose })
+        } else {
+            if (verbose) {
+                console.log(`extracting changes from the list of commits...`)
+            }
+            files = getCommitsChangedFiles(commitIds, { cwd, verbose });
         }
-        files = listChangedFilesBetweenBranches(refBranch)
-    } else {
-        if (verbose) {
-            console.log(`extracting changes from the list of commits...`)
+    }
+    catch (err) {
+        if (err instanceof GitCommandError) {
+            // Fail-safe: never skip downstream jobs because changes could not be computed.
+            tl.warning(`Unable to compute changed files, all variables are set to true. ${err.message}. ` +
+                `If the repository is a shallow clone, set "fetchDepth: 0" on the checkout step.`);
+            return { files: [], assumeAllChanged: true };
         }
-        files = getCommitsChangedFiles(commitIds, { cwd, verbose });
+        throw err;
     }
 
     if (verbose) {
         console.log(`Changed files are : ${files}`)
     }
-    return files;
+    return { files, assumeAllChanged: false };
 }
 
-function getChangesPerVariable(files: string[] | undefined, { inputs: { rules, variable, verbose, forceToTrue, forceByCategory } }: Context): Record<string, boolean> {
+function getChangesPerVariable({ files, assumeAllChanged }: ChangedFiles, { inputs: { rules, variable, verbose, forceToTrue, forceByCategory } }: Context): Record<string, boolean> {
     const groupedRules = parseRules(rules, variable);
     const categories = Object.keys(groupedRules).filter(cat => groupedRules[cat].length > 0);
 
-    if (!files || !files.length) {
+    if (assumeAllChanged) {
+        return fromEntries(categories.map(cat => [cat, true]));
+    }
+
+    if (!files.length) {
         return fromEntries(categories.map(cat => [cat, forceToTrue || isCategoryForced(cat, forceByCategory)]));
     }
 
@@ -106,12 +125,8 @@ function getChangesPerVariable(files: string[] | undefined, { inputs: { rules, v
     );
 }
 
-function isCategoryForced(category: string, forceByCategory: Record<string, boolean>):  boolean {
-    if (forceByCategory[category]) {
-        return true
-    } else {
-        return false
-    }
+function isCategoryForced(category: string, forceByCategory: Record<string, boolean>): boolean {
+    return forceByCategory[category] === true;
 }
 
 function setVariables(changes: Record<string, boolean>, { inputs: { isOutput, verbose } }: Context): void {
@@ -120,6 +135,12 @@ function setVariables(changes: Record<string, boolean>, { inputs: { isOutput, ve
 
         setVariable(variable, String(hasChanged), isOutput);
     }
+}
+
+interface ChangedFiles {
+    files: string[];
+    /** true when changes could not be computed (git error): every variable is set to true */
+    assumeAllChanged: boolean;
 }
 
 interface Context {

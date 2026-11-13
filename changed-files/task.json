@@ -63,6 +63,15 @@
       "helpMarkDown": "If set to true all variables will be set to true. If should be a dynamic value computed based on pipeline parameters for example."
     },
     {
+      "name": "forceByCategory",
+      "type": "multiLine",
+      "groupName": "advanced",
+      "label": "Force by category",
+      "defaultValue": "",
+      "required": false,
+      "helpMarkDown": "One `Category: true|false` per line. A category set to true gets its variable set to true whatever the changes."
+    },
+    {
       "name": "cwd",
       "type": "filePath",
       "groupName": "advanced",

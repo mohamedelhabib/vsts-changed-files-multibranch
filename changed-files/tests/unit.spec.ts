@@ -1,5 +1,6 @@
 import { parseRules, parseForceByCategory } from "../lib/parser";
 import { matchFiles } from "../lib/matcher";
+import { isSameBranch, normalizeBranch } from "../lib/branch";
 
 /*
  * L1 - pure unit tests.
@@ -52,8 +53,14 @@ describe("parseForceByCategory", () => {
         expect(parseForceByCategory("A: yes")).toEqual({ A: false });
     });
 
-    test("CHARACTERIZATION B7: Should_Throw_When_LineHasNoColon", () => {
-        expect(() => parseForceByCategory("A")).toThrow(TypeError);
+    test("Should_ReportAndSkip_When_LineHasNoColon (B7)", () => {
+        const invalid: string[] = [];
+        expect(parseForceByCategory("A\nB: true\n: true", l => invalid.push(l))).toEqual({ B: true });
+        expect(invalid).toEqual(["A", ": true"]);
+    });
+
+    test("Should_NotThrow_When_NoInvalidCallback", () => {
+        expect(parseForceByCategory("A")).toEqual({});
     });
 });
 
@@ -87,13 +94,51 @@ describe("matchFiles", () => {
         expect(matchFiles(["src/a.ts"], ["!src/b.ts"])).toBe(false);
     });
 
-    test("CHARACTERIZATION B2: Should_ReturnTrue_When_ExcludedFilePlusUnrelatedFile", () => {
-        // Expected (correct) result is false: README.md is not included, src/a.ts is excluded.
-        expect(matchFiles(["src/a.ts", "README.md"], ["src/**", "!src/a.ts"])).toBe(true);
+    test("Should_ReturnFalse_When_ExcludedFilePlusUnrelatedFile (B2)", () => {
+        expect(matchFiles(["src/a.ts", "README.md"], ["src/**", "!src/a.ts"])).toBe(false);
+    });
+
+    test("Should_ReturnTrue_When_ExcludedFilePlusOtherIncludedFile", () => {
+        expect(matchFiles(["src/a.ts", "README.md", "src/b.ts"], ["src/**", "!src/a.ts"])).toBe(true);
+    });
+
+    test("Should_ApplyAllExclusions_When_SeveralExclusions", () => {
+        expect(matchFiles(["src/a.ts", "src/b.md"], ["src/**", "!src/a.ts", "!**/*.md"])).toBe(false);
+        expect(matchFiles(["src/a.ts", "src/c.ts"], ["src/**", "!src/a.ts", "!**/*.md"])).toBe(true);
+    });
+
+    test("Should_NotDependOnRuleOrder_When_ExclusionBeforeInclusion", () => {
+        expect(matchFiles(["src/a.ts", "README.md"], ["!src/a.ts", "src/**"])).toBe(false);
     });
 
     test("CHARACTERIZATION: Should_IgnoreDotfiles_When_DefaultMinimatchOptions", () => {
         // minimatch default dot:false -> changes only under .github/ do not match "**".
         expect(matchFiles([".github/workflows/ci.yml"], ["**"])).toBe(false);
+    });
+});
+
+describe("branch", () => {
+
+    test.each([
+        ["refs/heads/master", "master"],
+        ["refs/heads/feature/x", "feature/x"],
+        ["origin/master", "master"],
+        ["refs/remotes/origin/master", "master"],
+        [" master ", "master"],
+        ["refs/pull/12/merge", "refs/pull/12/merge"],
+    ])("Should_Normalize_%s_To_%s", (input, expected) => {
+        expect(normalizeBranch(input)).toBe(expected);
+    });
+
+    test("Should_BeSameBranch_When_DifferentSpellings", () => {
+        expect(isSameBranch("master", "refs/heads/master")).toBe(true);
+        expect(isSameBranch("origin/master", "refs/heads/master")).toBe(true);
+        expect(isSameBranch("refs/heads/master", "refs/heads/master")).toBe(true);
+    });
+
+    test("Should_NotBeSameBranch_When_DifferentBranchOrPullRequest", () => {
+        expect(isSameBranch("origin/master", "refs/heads/feature/master")).toBe(false);
+        expect(isSameBranch("origin/master", "refs/pull/12/merge")).toBe(false);
+        expect(isSameBranch("origin/main", "refs/heads/master")).toBe(false);
     });
 });

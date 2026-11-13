@@ -23,11 +23,11 @@ tmr.setAnswers({
         "/bin/git": true
     },
     exec: {
-        "/bin/git log -m -1 --name-only --pretty=format: latest_commit_id": {
+        "/bin/git -c core.quotePath=false log -m -1 --name-only --pretty=format: latest_commit_id": {
             code: 0,
             stdout: "test/file1.ts\ntest/file2.ts\ndocs/index.md"
         },
-        "/bin/git log -m -1 --name-only --pretty=format: latest_commit_id_1": {
+        "/bin/git -c core.quotePath=false log -m -1 --name-only --pretty=format: latest_commit_id_1": {
             code: 0,
             stdout: "src/file1.ts\nsrc/file2.ts\ndocs/index.md"
         }

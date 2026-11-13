@@ -1,70 +1,60 @@
-import { PassThrough } from "stream";
-
 import * as tl from "azure-pipelines-task-lib/task";
 
-export function listChangedFilesBetweenBranches(refBranch: string, { cwd, verbose }: { cwd?: string; verbose?: boolean } = {}): string[] {
-    const gitDiffCmdArgs: string[] = ["diff", "--name-only", `${refBranch}...`]
-    return listChangedFiles(gitDiffCmdArgs, { cwd, verbose })
+export interface GitOptions {
+    cwd?: string;
+    verbose?: boolean;
 }
 
-export function getCommitsChangedFiles(commitIds: string[], { cwd, verbose }: { cwd?: string; verbose?: boolean } = {}): string[] {
-    const files: string[][] = commitIds.map(commitId => {
-        if (verbose) {
-            console.log(`> Executing git show --no-patch --format="%P" ${commitId}`);
-        }
-
-        return getCommitChangedFiles(commitId, { cwd, verbose });
-    })
-    // flatten the string[][] to string[]
-    return ([] as string[]).concat(...files);
+/**
+ * Raised when a git command exits with a non-zero code (shallow clone, unknown ref, missing commit...).
+ */
+export class GitCommandError extends Error {
+    constructor(public readonly args: string[], public readonly code: number, stderr: string) {
+        super(`git ${args.join(" ")} failed with exit code ${code}${stderr.trim() ? `: ${stderr.trim()}` : ""}`);
+        this.name = "GitCommandError";
+    }
 }
 
-export function getCommitChangedFiles(commitId: string, { cwd, verbose }: { cwd?: string; verbose?: boolean } = {}): string[] {
-    const gitDiffCmdArgs: string[] = ["log", "-m", "-1", "--name-only", "--pretty=format:", commitId]
-    return listChangedFiles(gitDiffCmdArgs, { cwd, verbose })
+/**
+ * Lists files changed on HEAD since it diverged from `refBranch` (`git diff --name-only <refBranch>...`).
+ */
+export function listChangedFilesBetweenBranches(refBranch: string, options: GitOptions = {}): string[] {
+    return listChangedFiles(["diff", "--name-only", `${refBranch}...`], options);
 }
 
-export function listChangedFiles(gitDiffCmdArgs: string[], { cwd, verbose }: { cwd?: string; verbose?: boolean } = {}): string[] {
+/**
+ * Lists files changed by all the given commits (flattened, duplicates kept).
+ */
+export function getCommitsChangedFiles(commitIds: string[], options: GitOptions = {}): string[] {
+    return commitIds.flatMap(commitId => getCommitChangedFiles(commitId, options));
+}
+
+/**
+ * Lists files changed by one commit. `-m` makes merge commits list their changes against each parent.
+ */
+export function getCommitChangedFiles(commitId: string, options: GitOptions = {}): string[] {
+    return listChangedFiles(["log", "-m", "-1", "--name-only", "--pretty=format:", commitId], options);
+}
+
+/**
+ * Runs a git command returning one path per line.
+ * `core.quotePath=false` keeps non-ASCII paths verbatim so they can be matched by glob rules.
+ *
+ * @throws GitCommandError when git exits with a non-zero code.
+ */
+export function listChangedFiles(args: string[], { cwd, verbose }: GitOptions = {}): string[] {
+    const fullArgs = ["-c", "core.quotePath=false", ...args];
     if (verbose) {
-        console.log(`> Executing git with following args${gitDiffCmdArgs}`);
+        console.log(`> Executing git ${fullArgs.join(" ")}`);
     }
 
-    return tl.execSync("git", gitDiffCmdArgs, { cwd })
-        .stdout
+    const res = tl.execSync("git", fullArgs, { cwd });
+    if (res.code !== 0 || res.error) {
+        throw new GitCommandError(fullArgs, res.code, res.stderr || res.error?.message || "");
+    }
+
+    return res.stdout
         .split("\n")
         .map(l => l.trim())
-        .filter(l => l != "")
-}
-
-export async function gitDiff(from: string, to: string, { cwd, verbose }: { cwd?: string; verbose?: boolean } = {}): Promise<string[]> {
-    const res: string[] = [];
-
-    const outStream = new PassThrough();
-
-    if (verbose) {
-        console.log(`> Executing git diff from HEAD to ${to}`);
-        outStream.pipe(process.stdout);
-    }
-
-    outStream.on("data", (data: Buffer) => {
-        const files = data.toString().split("\n").map(l => l.trim()).filter(l => !!l);
-        res.push(...files);
-    });
-
-    await tl.exec("git", ["diff", "--name-only", from, to, "."], { cwd, outStream, });
-
-    return res.filter(l => {
-        if (l.startsWith("[command]")) return false;
-        if (l.startsWith("rc:")) return false;
-        if (l.startsWith("success:")) return false;
-        return true;
-    });
-}
-
-export async function gitVerify(commitId: string, { cwd, verbose }: { cwd?: string; verbose?: boolean } = {}): Promise<boolean> {
-    if (verbose) {
-        console.log(`> Executing git cat-file with ${commitId}`);
-    }
-
-    return 0 === await tl.exec("git", ["cat-file", "-t", commitId], { cwd, ignoreReturnCode: true });
+        .filter(l => l !== "");
 }

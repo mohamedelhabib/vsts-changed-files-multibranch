@@ -1,5 +1,43 @@
 import * as nock from "nock";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import * as tmrm from "azure-pipelines-task-lib/mock-run";
 import { Build } from "azure-devops-node-api/interfaces/BuildInterfaces";
+
+export interface ScenarioExec {
+    code: number;
+    stdout?: string;
+    stderr?: string;
+}
+
+/**
+ * Declares and runs a task scenario: common pipeline variables, inputs, mocked git answers and mocked API.
+ * Keys of `exec` are the git arguments, e.g. "log -m -1 --name-only --pretty=format: latest_commit_id".
+ */
+export function runScenario({ inputs, sourceBranch, exec }: { inputs: Record<string, string>; sourceBranch?: string; exec: Record<string, ScenarioExec> }): void {
+    setCommonsVariable();
+    if (sourceBranch) {
+        setVariable("Build.SourceBranch", sourceBranch);
+    }
+
+    const tmr = new tmrm.TaskMockRunner(path.join(__dirname, "..", "index.js"));
+    tmr.setInput("variable", "HasChanged");
+    tmr.setInput("isOutput", "true");
+    tmr.setInput("verbose", "true");
+    Object.entries(inputs).forEach(([name, value]) => tmr.setInput(name, value));
+
+    tmr.setAnswers({
+        which: { "git": "/bin/git" },
+        exist: { "/bin/git": true },
+        checkPath: { "/bin/git": true },
+        exec: Object.fromEntries(Object.entries(exec).map(([args, res]) =>
+            [`/bin/git -c core.quotePath=false ${args}`, { code: res.code, stdout: res.stdout || "", stderr: res.stderr || "" }])),
+    });
+
+    mockTfsApi();
+    tmr.run();
+}
 
 export interface TestContext {
     TEAM_PROJECT_ID?: string;
@@ -10,6 +48,9 @@ export interface TestContext {
 
 export function setCommonsVariable({ TEAM_PROJECT_ID = "project", SOURCE_VERSION = "source_commit_id", ACCESS_TOKEN = "access_token", DEFINITION_ID = "500" }: TestContext = {}): TestContext {
 
+    // task-lib stores its input vault key in <Agent.TempDirectory>/.taskkey (default: cwd).
+    // A private directory per scenario process avoids races when Jest runs suites in parallel.
+    setVariable("Agent.TempDirectory", fs.mkdtempSync(path.join(os.tmpdir(), "cf-agent-")));
 
     setVariable("System.TeamProjectId", TEAM_PROJECT_ID);
     setVariable("System.TeamFoundationCollectionUri", "https://dev.azure.com/orga");
