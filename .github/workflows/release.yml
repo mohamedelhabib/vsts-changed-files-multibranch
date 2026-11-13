@@ -53,7 +53,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"publisherName": "MohamedElhabib"}')
 
-          TOKEN=$(echo "${RESPONSE}" | jq -r '.token // .accessToken // .access_token // empty')
+          TOKEN=$(echo "${RESPONSE}" | jq -r '.credential // .token // .accessToken // .access_token // empty')
           if [ -z "${TOKEN}" ]; then
             echo "::error::Marketplace token exchange failed: ${RESPONSE}"
             exit 1
