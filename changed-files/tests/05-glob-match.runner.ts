@@ -23,7 +23,7 @@ tmr.setAnswers({
         "/bin/git": true
     },
     exec: {
-        "/bin/git -c core.quotePath=false log -m -1 --name-only --pretty=format: latest_commit_id": {
+        "/bin/git -c core.quotePath=false log --first-parent -m -1 --relative --no-renames --name-only --pretty=format: --end-of-options latest_commit_id --": {
             code: 0,
             stdout: "src/file1.ts\nsrc/file2.ts\ndocs/index.md"
         }

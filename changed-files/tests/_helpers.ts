@@ -5,26 +5,47 @@ import * as path from "path";
 import * as tmrm from "azure-pipelines-task-lib/mock-run";
 import { Build } from "azure-devops-node-api/interfaces/BuildInterfaces";
 
+export const GIT_LOG_SINGLE = "log --first-parent -m -1 --relative --no-renames --name-only --pretty=format: --end-of-options latest_commit_id --";
+export const GIT_DIFF_ORIGIN_MASTER = "diff --relative --no-renames --name-only --end-of-options origin/master... --";
+
 export interface ScenarioExec {
     code: number;
     stdout?: string;
     stderr?: string;
 }
 
+export interface ScenarioConfig {
+    inputs: Record<string, string>;
+    sourceBranch?: string;
+    env?: Record<string, string | undefined>;
+    verbose?: boolean;
+    mockApi?: boolean;
+    exec: Record<string, ScenarioExec>;
+}
+
 /**
  * Declares and runs a task scenario: common pipeline variables, inputs, mocked git answers and mocked API.
- * Keys of `exec` are the git arguments, e.g. "log -m -1 --name-only --pretty=format: latest_commit_id".
  */
-export function runScenario({ inputs, sourceBranch, exec }: { inputs: Record<string, string>; sourceBranch?: string; exec: Record<string, ScenarioExec> }): void {
+export function runScenario({ inputs, sourceBranch, env, verbose = true, mockApi = true, exec }: ScenarioConfig): void {
     setCommonsVariable();
     if (sourceBranch) {
         setVariable("Build.SourceBranch", sourceBranch);
+    }
+    if (env) {
+        for (const [key, val] of Object.entries(env)) {
+            if (val === undefined) {
+                delete process.env[key];
+            }
+            else {
+                process.env[key] = val;
+            }
+        }
     }
 
     const tmr = new tmrm.TaskMockRunner(path.join(__dirname, "..", "index.js"));
     tmr.setInput("variable", "HasChanged");
     tmr.setInput("isOutput", "true");
-    tmr.setInput("verbose", "true");
+    tmr.setInput("verbose", String(verbose));
     Object.entries(inputs).forEach(([name, value]) => tmr.setInput(name, value));
 
     tmr.setAnswers({
@@ -35,7 +56,12 @@ export function runScenario({ inputs, sourceBranch, exec }: { inputs: Record<str
             [`/bin/git -c core.quotePath=false ${args}`, { code: res.code, stdout: res.stdout || "", stderr: res.stderr || "" }])),
     });
 
-    mockTfsApi();
+    if (mockApi) {
+        mockTfsApi();
+    }
+    else {
+        nock.disableNetConnect();
+    }
     tmr.run();
 }
 
@@ -49,8 +75,18 @@ export interface TestContext {
 export function setCommonsVariable({ TEAM_PROJECT_ID = "project", SOURCE_VERSION = "source_commit_id", ACCESS_TOKEN = "access_token", DEFINITION_ID = "500" }: TestContext = {}): TestContext {
 
     // task-lib stores its input vault key in <Agent.TempDirectory>/.taskkey (default: cwd).
-    // A private directory per scenario process avoids races when Jest runs suites in parallel.
-    setVariable("Agent.TempDirectory", fs.mkdtempSync(path.join(os.tmpdir(), "cf-agent-")));
+    // A private directory per scenario process avoids races when Jest runs suites in parallel,
+    // and cleaning it on process exit prevents /tmp accumulation across test runs.
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cf-agent-"));
+    process.on("exit", () => {
+        try {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+        catch {
+            // Best-effort cleanup on exit.
+        }
+    });
+    setVariable("Agent.TempDirectory", tmpDir);
 
     setVariable("System.TeamProjectId", TEAM_PROJECT_ID);
     setVariable("System.TeamFoundationCollectionUri", "https://dev.azure.com/orga");
@@ -73,10 +109,17 @@ export function setVariable(name: string, value: string): void {
 }
 
 export function getVariableKey(name: string): string {
-    return name.replace(/\./g, '_').toUpperCase();
+    return name.replace(/\./g, "_").toUpperCase();
 }
 
 export function mockTfsApi({ query }: { query?: Record<string, string>, build?: Partial<Build> | null } = {}): nock.Scope {
+    const truncatedChanges = Array.from({ length: 200 }, (_, idx) => ({
+        id: `commit_id_${idx}`,
+        message: `commit ${idx}`,
+        type: "TfsGit",
+        author: { displayName: "User name" },
+        timestamp: "2021-07-13T17:45:46Z",
+    }));
 
     return nock("https://dev.azure.com")
 
@@ -146,6 +189,17 @@ export function mockTfsApi({ query }: { query?: Record<string, string>, build?: 
                 }
             ]
         }))
+
+        .get("/orga/project/_apis/build/builds/503/changes")
+        .query(query || true)
+        .reply(200, JSON.stringify({
+            "count": 200,
+            "value": truncatedChanges,
+        }))
+
+        .get("/orga/project/_apis/build/builds/504/changes")
+        .query(query || true)
+        .reply(500, JSON.stringify({ message: "Internal Server Error" }))
 
         .get("/orga/project/_apis/build/builds/100/changes")
         .query(query || true)

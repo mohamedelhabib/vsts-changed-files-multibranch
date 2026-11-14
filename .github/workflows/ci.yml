@@ -6,6 +6,9 @@ on:
       - '**'
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -27,7 +30,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Lint, build and test
         run: npm test -- --ci
@@ -46,10 +49,10 @@ jobs:
           cache: npm
 
       - name: Install tools
-        run: npm install -g tfx-cli
+        run: npm install -g tfx-cli@0.21.1 --ignore-scripts
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Package vsix
         run: npm run pack

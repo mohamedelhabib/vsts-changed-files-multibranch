@@ -7,17 +7,17 @@ This project is a fork from https://github.com/touchifyapp/vsts-changed-files.
 
 The main differences of this extension are:
 
-- added support of multi branches pipeline
-- added support of merge commit
-- usage of the [Get Build Changes](https://docs.microsoft.com/en-us/rest/api/azure/devops/build/builds/get%20build%20changes?view=azure-devops-rest-6.0) rest api to get the list of changes instead of comparing with the previous build.
+- added support for multi-branch pipelines and pull requests
+- added accurate support for merge commits (`--first-parent -m`) and file renames (`--no-renames`)
+- usage of the [Get Build Changes](https://learn.microsoft.com/en-us/rest/api/azure/devops/build/builds/get-build-changes?view=azure-devops-rest-7.1) REST API on single-branch builds (with truncation fail-safe) and direct Git three-dot branch diffing on feature/PR builds
 
 ## Installation
 
-Installation can be done using [Visual Studio MarketPlace](https://marketplace.visualstudio.com/items?itemName=mohamedelhabib.vsts-changed-files-multibranch).
+Installation can be done using [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=mohamedelhabib.vsts-changed-files-multibranch).
 
 ## Source Code
 
-Source code can be found on [Github](https://github.com/mohamedelhabib/vsts-changed-files-multibranch).
+Source code can be found on [GitHub](https://github.com/mohamedelhabib/vsts-changed-files-multibranch).
 
 ## Simple Usage
 
@@ -28,6 +28,8 @@ jobs:
     pool:
         vmImage: ubuntu-latest
     steps:
+      - checkout: self
+        fetchDepth: 0
       - task: ChangedFilesMultibranch@2
         name: CheckChanges
         inputs:
@@ -51,6 +53,8 @@ jobs:
     pool:
         vmImage: ubuntu-latest
     steps:
+      - checkout: self
+        fetchDepth: 0
       - task: ChangedFilesMultibranch@2
         name: CheckChanges
         inputs:
@@ -86,6 +90,8 @@ jobs:
     pool:
         vmImage: ubuntu-latest
     steps:
+      - checkout: self
+        fetchDepth: 0
       - task: ChangedFilesMultibranch@2
         name: CheckChanges
         inputs:
@@ -94,16 +100,15 @@ jobs:
             src/**/*.ts
             !src/**/excludedFile.ts
             src/**/*.html
-
 ```
 
 A category is `true` when at least one changed file matches an include rule **and** no exclusion rule (`!pattern`).
-Exclusions can be written anywhere in the category. Files starting with a dot (e.g. `.github/...`) are not matched by `**`.
+Exclusions can be written anywhere in the category. By default, files starting with a dot (e.g. `.github/...`) are not matched by `**`; set `matchDotFiles: true` to include dotfiles.
 
 ## Multiple branches Usage
 
 The reference branch must be fetched: use a full clone (`fetchDepth: 0`) on the checkout step.
-`refBranch` accepts `origin/master`, `master` or `refs/heads/master`.
+`refBranch` accepts `origin/master`, `master`, or `refs/heads/master` (resolved against `origin/<branch>` on detached-HEAD agent checkouts). On pull request builds, `refBranch` automatically falls back to `$(System.PullRequest.TargetBranch)` when omitted, and branch diffing requires no `System.AccessToken` (works on fork PRs).
 
 ```yaml
 jobs: 
@@ -143,19 +148,20 @@ jobs:
 
 ## Options
 
-- __rules__: Filter files to check changes for.  _Default:_ `**` _(match all files)_.
+- __rules__: Filter files to check changes for. _Default:_ `**` _(match all non-dot files)_.
 - __variable__: The name of the default output variable to set to be available in next steps/jobs/stages. _Default:_ `HasChanged`.
-- __isOutput__: Are variables available in next stages?  _Default:_ `true`.
-- __refBranch__: The branch that will be used as reference to check changes in case multi branches pipeline.
-- __forceToTrue__: If set to true all variables will be set to true. If should be a dynamic value computed based on pipeline parameters for example.
-- __forceByCategory__: One `Category: true|false` per line to force some variables to true. Invalid lines are ignored with a warning.
-- __cwd__: Change the current working directory. _Default:_ `$(System.DefaultWorkingDirectory)`
+- __isOutput__: Are variables available in next stages? _Default:_ `true`.
+- __refBranch__: The branch used as reference in multi-branch pipelines. Falls back to `System.PullRequest.TargetBranch` on PR builds when omitted.
+- __forceToTrue__: If set to `true`, all configured variables will be set to `true`. _Default:_ `false`.
+- __forceByCategory__: One `Category: true|false` per line to force specific category variables to `true`. Invalid lines are ignored with a warning.
+- __matchDotFiles__: Match files and directories starting with `.` (e.g. `.github/**`). _Default:_ `false`.
+- __cwd__: Change the current working directory (paths are evaluated relative to `cwd`). _Default:_ `$(System.DefaultWorkingDirectory)`.
 - __verbose__: Enable verbose logging. _Default:_ `false`.
 
 ## Requirements & behavior
 
-- Runs on the `Node24` handler, with `Node20_1` as fallback for older agents (the deprecated `Node10` handler was removed in 2.6.0).
-- **Fail-safe**: when changed files cannot be computed (shallow clone, unknown reference branch or commit), the task logs a warning and sets **all variables to `true`**, so downstream jobs run instead of being silently skipped.
+- Runs on the `Node24` handler, with `Node20_1` as fallback (`minimumAgentVersion: 3.227.0`; the deprecated `Node10` handler was removed in 2.6.0).
+- **Fail-safe**: when changed files cannot be computed reliably (shallow clone / grafted commit, missing merge base, API failure, or `>= 200` commits in single-branch build changes), the task logs a warning and sets **all variables to `true`**, so downstream jobs run instead of being silently skipped.
 
 ## License
 
@@ -167,7 +173,7 @@ jobs:
 - [x] git create new branch without changes vs reference branch
 - [x] git push with single commit
 - [x] git push with several commits
-- [x] git repo with multiple branches and a pipline for multiple branches
+- [x] git repo with multiple branches and a pipeline for multiple branches
 - [x] git merge a branch into another branch
 - [x] git cherry-pick
 - [x] git rebase and push force
@@ -177,26 +183,26 @@ jobs:
 
 ```shell
 npm ci
-npm test              # lint + build + all tests (unit, real git, task scenarios)
+npm test              # lint + clean build + all tests (unit, real git, task scenarios, vsix verification)
 npm run verify        # npm test + package the vsix + verify its content (needs tfx-cli)
 ```
 
 Test layers (`changed-files/tests`):
 
-- `unit.spec.ts`: rules parsing, glob matching, branch normalization
-- `git.spec.ts`: real git repositories created in a temp dir (merges, renames, shallow clones, non-ASCII paths)
+- `unit.spec.ts`: rules parsing, glob matching, branch normalization, manifest & VSIX verification contracts
+- `git.spec.ts`: real git repositories created in a temp dir (merges, renames, shallow clones, monorepo `cwd`, VSO sanitization, option-injection defense)
 - `index.spec.ts`, `scenarios.spec.ts`: the compiled task run through `azure-pipelines-task-lib` `MockTestRunner` (mocked git + Azure DevOps API)
-- `scripts/verify-vsix.js`: checks the packaged extension (handlers, versions, declared inputs, runtime dependencies)
-- `scripts/run-local.sh`: runs the compiled task against a real repository and a real build
-- `e2e/azure-pipelines.yml`: end-to-end checklist pipeline for a test organization
-- `scripts/create-e2e-repo.sh`: creates the local e2e test repository (and `many-commits` for the >50 commits check)
+- `scripts/pack-vsix.js` & `scripts/verify-vsix.js`: stages and verifies the packaged extension in isolation
+- `scripts/run-local.sh`: runs the compiled task against a real repository and build
+- `e2e/azure-pipelines.yml`: end-to-end checklist pipeline with assertions and downstream output checks
+- `scripts/create-e2e-repo.sh`: creates the local e2e test repository (and `many-commits` for >50 / >200 commit checks)
 - `scripts/upload-dev-task.sh`: uploads the current build of the task to a test organization (no Marketplace)
 
-The tests run with the current Node version when it is a task handler version (20 or 24), offline.
+The tests run hermetically offline using the active Node runtime (`>=20`).
 
 ## Release new version
 
-To release and publish a new version run the following command.
+To release and publish a new version run the following command:
 
 ```shell
 npm version major|minor|patch
@@ -204,8 +210,8 @@ npm version major|minor|patch
 
 This command will:
 
-- bump the version into package.json task.json and vss-extension.json
-- commit and push those change
+- bump the version in `package.json`, `changed-files/task.json`, and `vss-extension.json`
+- commit and push those changes
 - tag the git repository with the new version
 
-The github `.github/workflows/release.yml` workflow will be automatically, this pipeline will package and publish the version to the marketplace.
+The GitHub `.github/workflows/release.yml` workflow triggers automatically on the version tag, builds and verifies the VSIX in an unprivileged job, and publishes it to the Visual Studio Marketplace via OIDC.

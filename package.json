@@ -5,7 +5,10 @@
   "author": "MohamedElhabib",
   "license": "MIT",
   "private": true,
-  "main": "index.js",
+  "main": "changed-files/index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "homepage": "https://github.com/mohamedelhabib/vsts-changed-files-multibranch#readme",
   "repository": {
     "type": "git",
@@ -15,14 +18,12 @@
     "url": "https://github.com/mohamedelhabib/vsts-changed-files-multibranch/issues"
   },
   "scripts": {
-    "build": "tsc -p .",
+    "clean": "node scripts/clean.js",
+    "build": "npm run clean && tsc -p .",
     "test": "npm run lint && npm run build && jest",
     "jest": "jest",
     "lint": "eslint changed-files",
-    "pack": "npm run build && npm run test && npm run pack:modules && npm run pack:extension && npm run pack:clean",
-    "pack:modules": "cp package.json changed-files && cp package-lock.json changed-files && cd changed-files && npm ci --omit=dev --ignore-scripts",
-    "pack:extension": "tfx extension create --manifest-globs vss-extension.json --output-path vsts-changed-files-multibranch.vsix",
-    "pack:clean": "rm changed-files/package.json && rm changed-files/package-lock.json && rm -r changed-files/node_modules",
+    "pack": "npm test && node scripts/pack-vsix.js",
     "preversion": "npm test",
     "version": "node scripts/version.js && git add package-lock.json package.json changed-files/task.json vss-extension.json",
     "postversion": "git push && git push --tags",

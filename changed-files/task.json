@@ -13,6 +13,7 @@
     "Minor": 6,
     "Patch": 0
   },
+  "minimumAgentVersion": "3.227.0",
   "instanceNameFormat": "Check changed files: $(variable)",
   "groups": [
     {
@@ -51,16 +52,18 @@
       "name": "refBranch",
       "type": "string",
       "label": "Reference branch",
-      "required": true,
-      "helpMarkDown": "The branch that will be used as reference to compare in case of multi branches pipeline"
+      "defaultValue": "",
+      "required": false,
+      "helpMarkDown": "The branch that will be used as reference to compare in case of multi-branch pipelines. On pull request builds, defaults to System.PullRequest.TargetBranch when omitted."
     },
     {
       "name": "forceToTrue",
       "type": "boolean",
       "groupName": "advanced",
       "label": "Force to true",
-      "required": true,
-      "helpMarkDown": "If set to true all variables will be set to true. If should be a dynamic value computed based on pipeline parameters for example."
+      "defaultValue": false,
+      "required": false,
+      "helpMarkDown": "If set to true all variables will be set to true. It should be a dynamic value computed based on pipeline parameters for example."
     },
     {
       "name": "forceByCategory",
@@ -70,6 +73,15 @@
       "defaultValue": "",
       "required": false,
       "helpMarkDown": "One `Category: true|false` per line. A category set to true gets its variable set to true whatever the changes."
+    },
+    {
+      "name": "matchDotFiles",
+      "type": "boolean",
+      "groupName": "advanced",
+      "label": "Match dotfiles",
+      "defaultValue": false,
+      "required": false,
+      "helpMarkDown": "Match files and directories starting with a dot (e.g. `.github/workflows/ci.yml`) when evaluating glob rules."
     },
     {
       "name": "cwd",

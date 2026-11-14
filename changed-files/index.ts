@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import * as tl from "azure-pipelines-task-lib/task";
 
 import type { IBuildApi } from "azure-devops-node-api/BuildApi";
@@ -6,44 +8,75 @@ import { GitCommandError, getCommitsChangedFiles, listChangedFilesBetweenBranche
 import { parseRules, parseForceByCategory } from "./lib/parser";
 import { matchFiles } from "./lib/matcher";
 import { isSameBranch } from "./lib/branch";
-import { getBuildChanges, createClient } from "./lib/builds";
-import { getVariable, setVariable, fromEntries, logVerbose } from "./lib/util";
+import { AZDO_MAX_BUILD_CHANGES, getBuildChangesWithMeta, createClient } from "./lib/builds";
+import { getVariable, setVariable, fromEntries, logVerbose, sanitizeVso } from "./lib/util";
 
-run();
+export interface ChangedFiles {
+    files: string[];
+    /** true when changes could not be computed (git/API error or truncation): every variable is set to true */
+    assumeAllChanged: boolean;
+}
 
-async function run(): Promise<void> {
+export interface Context {
+    inputs: {
+        variable: string;
+        rules: string;
+        isOutput: boolean;
+        refBranch: string | undefined;
+        forceToTrue: boolean;
+        forceByCategory: Record<string, boolean>;
+        matchDotFiles: boolean;
+        cwd: string | undefined;
+        verbose: boolean;
+    };
+}
+
+if (process.env.CHANGED_FILES_NO_AUTORUN !== "1") {
+    void run();
+}
+
+/**
+ * Main Azure Pipelines task entrypoint.
+ */
+export async function run(): Promise<void> {
+    let activeToken: string | undefined;
     try {
         const context = createContext();
-        const client = await initializeClient();
 
-        const changed = await getChangedFiles(client, context);
+        const changed: ChangedFiles = context.inputs.forceToTrue
+            ? { files: [], assumeAllChanged: false }
+            : await getChangedFiles(context, token => {
+                activeToken = token;
+            });
+
         const changes = getChangesPerVariable(changed, context);
-
         setVariables(changes, context);
     }
     catch (err) {
-        tl.setResult(tl.TaskResult.Failed, (err as Error).message);
+        const rawMessage = err instanceof Error ? err.message : String(err);
+        tl.setResult(tl.TaskResult.Failed, sanitizeVso(redactSecret(rawMessage, activeToken)));
     }
 }
 
-function createContext(): Context {
-    const project = getVariable("System.TeamProjectId");
-
-    const variable = tl.getInput("variable", true) || "FilesChanged";
+/**
+ * Reads and normalizes task inputs from the Azure Pipelines environment.
+ */
+export function createContext(): Context {
+    const variable = tl.getInput("variable", false) || "HasChanged";
     const rules = tl.getInput("rules") || "**";
     const isOutput = tl.getBoolInput("isOutput");
-    const cwd = tl.getInput("cwd") || tl.cwd();
+    const cwd = resolveWorkingDirectory();
     const verbose = tl.getBoolInput("verbose");
-    const refBranch = tl.getInput("refBranch", false);
+    const refBranch = tl.getInput("refBranch", false)?.trim() || undefined;
     const forceToTrue = tl.getBoolInput("forceToTrue", false);
+    const matchDotFiles = tl.getBoolInput("matchDotFiles", false);
 
     const forceByCategory = parseForceByCategory(
         tl.getInput("forceByCategory") || "",
-        line => tl.warning(`forceByCategory: ignoring invalid line "${line}" (expected "Category: true|false")`)
+        line => tl.warning(sanitizeVso(`forceByCategory: ignoring invalid line "${line}" (expected "Category: true|false")`))
     );
 
     return {
-        project,
         inputs: {
             variable,
             rules,
@@ -51,63 +84,105 @@ function createContext(): Context {
             refBranch,
             forceToTrue,
             forceByCategory,
+            matchDotFiles,
             cwd,
-            verbose
-        }
+            verbose,
+        },
     };
 }
 
-async function initializeClient(): Promise<IBuildApi> {
-    const orgUri = getVariable("System.TeamFoundationCollectionUri");
-    const accessToken = getVariable("System.AccessToken");
-
-    return createClient(orgUri, accessToken);
-}
-
-async function getChangedFiles(client: IBuildApi, { project, inputs: { cwd, verbose, refBranch } }: Context): Promise<ChangedFiles> {
-
-    const buildId = parseInt(getVariable("Build.BuildId"));
-    const commitIds: string[] = await getBuildChanges(client, project, buildId, { verbose });
-    const currentBranch: string = tl.getVariable("Build.SourceBranch") || "";
+/**
+ * Computes changed files using either branch three-dot diff mode or Azure DevOps build commit history.
+ */
+export async function getChangedFiles(
+    { inputs: { cwd, verbose, refBranch } }: Context,
+    onTokenResolved?: (token: string) => void
+): Promise<ChangedFiles> {
+    const currentBranch = tl.getVariable("Build.SourceBranch") || "";
+    const prTargetBranch = tl.getVariable("System.PullRequest.TargetBranch")?.trim() || undefined;
+    const effectiveRefBranch = refBranch || prTargetBranch;
 
     if (verbose) {
-        console.log(`Build id is ${buildId}`)
-        console.log(`refBranch = ${refBranch}`)
-        console.log(`currentBranch = ${currentBranch}`)
+        logVerbose(`refBranch = ${effectiveRefBranch ?? ""}`, { verbose: true });
+        logVerbose(`currentBranch = ${currentBranch}`, { verbose: true });
     }
 
-    let files: string[]
-    try {
-        if (refBranch && !isSameBranch(refBranch, currentBranch)) {
+    if (effectiveRefBranch && !isSameBranch(effectiveRefBranch, currentBranch)) {
+        try {
             if (verbose) {
-                console.log(`compare ${currentBranch} with the ref branch ${refBranch}...`)
+                logVerbose(`compare ${currentBranch} with the ref branch ${effectiveRefBranch}...`, { verbose: true });
             }
-            files = listChangedFilesBetweenBranches(refBranch, { cwd, verbose })
-        } else {
+            const files = listChangedFilesBetweenBranches(effectiveRefBranch, { cwd, verbose });
             if (verbose) {
-                console.log(`extracting changes from the list of commits...`)
+                logVerbose(`Changed files are : ${files.join(", ")}`, { verbose: true });
             }
-            files = getCommitsChangedFiles(commitIds, { cwd, verbose });
+            return { files, assumeAllChanged: false };
         }
+        catch (err) {
+            if (err instanceof GitCommandError) {
+                return failSafeOnError(err.message);
+            }
+            throw err;
+        }
+    }
+
+    const project = getVariable("System.TeamProjectId");
+    const buildId = parseBuildId(getVariable("Build.BuildId"));
+    const { client, accessToken } = await initializeClient();
+    onTokenResolved?.(accessToken);
+
+    if (verbose) {
+        logVerbose(`Build id is ${buildId}`, { verbose: true });
+    }
+
+    let commitIds: string[];
+    try {
+        const result = await getBuildChangesWithMeta(client, project, buildId, { verbose });
+        if (result.truncated) {
+            return failSafeOnError(
+                `Build ${buildId} returned at least ${AZDO_MAX_BUILD_CHANGES} commits and older changes may be truncated`
+            );
+        }
+        if (result.commitIds.length === 0 && tl.getVariable("Build.Repository.Provider") === "Git") {
+            return failSafeOnError(
+                "Azure DevOps returned 0 build changes for external Git provider; configure refBranch for branch diffing"
+            );
+        }
+        commitIds = result.commitIds;
+    }
+    catch (err) {
+        const msg = redactSecret(err instanceof Error ? err.message : String(err), accessToken);
+        return failSafeOnError(`Failed to query Azure DevOps build changes: ${msg}`);
+    }
+
+    try {
+        if (verbose) {
+            logVerbose("extracting changes from the list of commits...", { verbose: true });
+        }
+        const files = getCommitsChangedFiles(commitIds, { cwd, verbose });
+        if (verbose) {
+            logVerbose(`Changed files are : ${files.join(", ")}`, { verbose: true });
+        }
+        return { files, assumeAllChanged: false };
     }
     catch (err) {
         if (err instanceof GitCommandError) {
-            // Fail-safe: never skip downstream jobs because changes could not be computed.
-            tl.warning(`Unable to compute changed files, all variables are set to true. ${err.message}. ` +
-                `If the repository is a shallow clone, set "fetchDepth: 0" on the checkout step.`);
-            return { files: [], assumeAllChanged: true };
+            return failSafeOnError(err.message);
         }
         throw err;
     }
-
-    if (verbose) {
-        console.log(`Changed files are : ${files}`)
-    }
-    return { files, assumeAllChanged: false };
 }
 
-function getChangesPerVariable({ files, assumeAllChanged }: ChangedFiles, { inputs: { rules, variable, verbose, forceToTrue, forceByCategory } }: Context): Record<string, boolean> {
+/**
+ * Evaluates glob rules per category and returns the resulting boolean map.
+ */
+export function getChangesPerVariable(
+    { files, assumeAllChanged }: ChangedFiles,
+    { inputs: { rules, variable, verbose, forceToTrue, forceByCategory, matchDotFiles } }: Context
+): Record<string, boolean> {
     const groupedRules = parseRules(rules, variable);
+    validateRuleCategories(groupedRules, forceByCategory);
+
     const categories = Object.keys(groupedRules).filter(cat => groupedRules[cat].length > 0);
 
     if (assumeAllChanged) {
@@ -121,39 +196,90 @@ function getChangesPerVariable({ files, assumeAllChanged }: ChangedFiles, { inpu
     logVerbose("> Filtering files using glob rules", { verbose });
 
     return fromEntries(
-        categories.map(cat => [cat, forceToTrue || isCategoryForced(cat, forceByCategory) || matchFiles(files, groupedRules[cat])])
+        categories.map(cat => [
+            cat,
+            forceToTrue || isCategoryForced(cat, forceByCategory) || matchFiles(files, groupedRules[cat], { dot: matchDotFiles }),
+        ])
     );
 }
 
+async function initializeClient(): Promise<{ client: IBuildApi; accessToken: string }> {
+    const orgUri = getVariable("System.TeamFoundationCollectionUri");
+    const accessToken = tl.getEndpointAuthorizationParameter("SystemVssConnection", "AccessToken", true)
+        || getVariable("System.AccessToken");
+    const client = await createClient(orgUri, accessToken);
+    return { client, accessToken };
+}
+
+function resolveWorkingDirectory(): string | undefined {
+    const suppliedCwd = tl.getInput("cwd");
+    const defaultWorkDir = tl.getVariable("System.DefaultWorkingDirectory");
+    const repoLocalPath = tl.getVariable("Build.Repository.LocalPath");
+
+    if (suppliedCwd && suppliedCwd !== defaultWorkDir) {
+        return suppliedCwd;
+    }
+    if (repoLocalPath && fs.existsSync(path.join(repoLocalPath, ".git"))) {
+        return repoLocalPath;
+    }
+    return suppliedCwd || tl.cwd();
+}
+
+function parseBuildId(rawBuildId: string): number {
+    const parsed = Number(rawBuildId);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new Error(`Environment Error: Invalid "Build.BuildId" value "${rawBuildId}".`);
+    }
+    return parsed;
+}
+
+function failSafeOnError(reason: string): ChangedFiles {
+    tl.warning(
+        sanitizeVso(
+            `Unable to compute changed files, all variables are set to true. ${reason}. ` +
+            `If the repository is a shallow clone, set "fetchDepth: 0" on the checkout step.`
+        )
+    );
+    return { files: [], assumeAllChanged: true };
+}
+
+function validateRuleCategories(groupedRules: Record<string, string[]>, forceByCategory: Record<string, boolean>): void {
+    for (const forcedCategory of Object.keys(forceByCategory)) {
+        if (!Object.prototype.hasOwnProperty.call(groupedRules, forcedCategory) || groupedRules[forcedCategory].length === 0) {
+            tl.warning(sanitizeVso(`forceByCategory: category "${forcedCategory}" is not defined in rules or has no patterns`));
+        }
+    }
+
+    for (const [category, catRules] of Object.entries(groupedRules)) {
+        const active = catRules.filter(r => !r.startsWith("#"));
+        if (active.length > 0 && active.every(r => r.startsWith("!"))) {
+            tl.warning(
+                sanitizeVso(
+                    `Category "${category}" contains only exclusion rules ("!...") and no include rules; it can never match any file`
+                )
+            );
+        }
+    }
+}
+
 function isCategoryForced(category: string, forceByCategory: Record<string, boolean>): boolean {
-    return forceByCategory[category] === true;
+    return Object.prototype.hasOwnProperty.call(forceByCategory, category) && forceByCategory[category] === true;
 }
 
 function setVariables(changes: Record<string, boolean>, { inputs: { isOutput, verbose } }: Context): void {
     for (const [variable, hasChanged] of Object.entries(changes)) {
-        logVerbose(`>> ${variable.toUpperCase()}: ${hasChanged ? "Changes" : "No change"} detected since last succeeded build, setting "${variable}" to "${hasChanged}"`, { verbose });
+        logVerbose(
+            `>> ${variable.toUpperCase()}: ${hasChanged ? "Changes" : "No change"} detected since last succeeded build, setting "${variable}" to "${hasChanged}"`,
+            { verbose }
+        );
 
         setVariable(variable, String(hasChanged), isOutput);
     }
 }
 
-interface ChangedFiles {
-    files: string[];
-    /** true when changes could not be computed (git error): every variable is set to true */
-    assumeAllChanged: boolean;
-}
-
-interface Context {
-    project: string;
-
-    inputs: {
-        variable: string;
-        rules: string;
-        isOutput: boolean;
-        refBranch: string | undefined;
-        forceToTrue: boolean;
-        forceByCategory: Record<string, boolean>;
-        cwd: string;
-        verbose: boolean;
-    };
+function redactSecret(message: string, secret: string | undefined): string {
+    if (!secret) {
+        return message;
+    }
+    return message.split(secret).join("***");
 }

@@ -4,7 +4,7 @@
 # install the dev build of the extension (tfx build tasks upload / scripts/upload-dev-task.sh),
 # then create a pipeline from this file.
 #
-# Scenarios to run and expected values (see the "Report" step):
+# Scenarios to run and expected values (see the "Report & assert" step):
 #   1. push one commit touching src/ on master          -> Code=true  Docs=false
 #   2. push a feature branch touching docs/ only        -> Code=false Docs=true  (diff vs origin/master)
 #   3. open a PR from that branch into master           -> Code=false Docs=true
@@ -12,7 +12,9 @@
 #   5. run with parameter shallow=true                  -> warning + Code=true Docs=true (fail-safe)
 #   6. check the job log                                -> no Node handler deprecation warning
 #   7. "scripts/create-e2e-repo.sh many-commits" then ONE push of master (65 commits,
-#      only the oldest touches src/)                    -> Code=true (false = build changes truncated, B4)
+#      only the oldest touches src/)                    -> Code=true Docs=true (>50 default page check)
+#   8. "scripts/create-e2e-repo.sh many-commits ../cf-lab 205" then ONE push
+#                                                       -> warning + Code=true Docs=true (>=200 truncation fail-safe)
 #
 # Azure Repos: the "pr:" trigger below is ignored; PR builds need a branch policy
 # (Repos > Branches > master > Branch policies > Build validation).
@@ -28,32 +30,77 @@ parameters:
   - name: shallow
     type: boolean
     default: false
+  - name: expectedCode
+    type: string
+    default: 'any'
+    values: ['any', 'true', 'false']
+  - name: expectedDocs
+    type: string
+    default: 'any'
+    values: ['any', 'true', 'false']
 
 pool:
   vmImage: ubuntu-latest
 
-steps:
-  - ${{ if eq(parameters.shallow, true) }}:
-      - checkout: self
-        fetchDepth: 1
-  - ${{ if eq(parameters.shallow, false) }}:
-      - checkout: self
-        fetchDepth: 0
+jobs:
+  - job: Check
+    displayName: Detect changed files
+    steps:
+      - ${{ if eq(parameters.shallow, true) }}:
+          - checkout: self
+            fetchDepth: 1
+      - ${{ if eq(parameters.shallow, false) }}:
+          - checkout: self
+            fetchDepth: 0
 
-  - task: ChangedFilesMultibranch@2
-    name: cf
-    inputs:
-      refBranch: origin/master
-      verbose: true
-      rules: |
-        [Code]
-        src/**
-        !src/excluded.ts
-        [Docs]
-        docs/**
+      - task: ChangedFilesMultibranch@2
+        name: cf
+        inputs:
+          refBranch: origin/master
+          verbose: true
+          rules: |
+            [Code]
+            src/**
+            !src/excluded.ts
+            [Docs]
+            docs/**
 
-  - script: |
-      echo "Build.SourceBranch = $(Build.SourceBranch)"
-      echo "Code = $(cf.Code)"
-      echo "Docs = $(cf.Docs)"
-    displayName: Report
+      - bash: |
+          set -euo pipefail
+          echo "Build.SourceBranch = $(Build.SourceBranch)"
+          echo "Code = $(cf.Code)"
+          echo "Docs = $(cf.Docs)"
+          if [[ "${{ parameters.expectedCode }}" != "any" && "$(cf.Code)" != "${{ parameters.expectedCode }}" ]]; then
+            echo "##vso[task.logissue type=error]Expected Code=${{ parameters.expectedCode }} but got $(cf.Code)"
+            exit 1
+          fi
+          if [[ "${{ parameters.expectedDocs }}" != "any" && "$(cf.Docs)" != "${{ parameters.expectedDocs }}" ]]; then
+            echo "##vso[task.logissue type=error]Expected Docs=${{ parameters.expectedDocs }} but got $(cf.Docs)"
+            exit 1
+          fi
+        displayName: Report & assert
+
+  - job: VerifyOutputs
+    displayName: Verify cross-job output variables
+    dependsOn: Check
+    variables:
+      CodeFromCheck: $[ dependencies.Check.outputs['cf.Code'] ]
+      DocsFromCheck: $[ dependencies.Check.outputs['cf.Docs'] ]
+    steps:
+      - checkout: none
+      - bash: |
+          set -euo pipefail
+          echo "Cross-job Code = ${CODE_FROM_CHECK}"
+          echo "Cross-job Docs = ${DOCS_FROM_CHECK}"
+          if [[ "${CODE_FROM_CHECK}" != "true" && "${CODE_FROM_CHECK}" != "false" ]]; then
+            echo "##vso[task.logissue type=error]Invalid cross-job output Code=${CODE_FROM_CHECK}"
+            exit 1
+          fi
+          if [[ "${DOCS_FROM_CHECK}" != "true" && "${DOCS_FROM_CHECK}" != "false" ]]; then
+            echo "##vso[task.logissue type=error]Invalid cross-job output Docs=${DOCS_FROM_CHECK}"
+            exit 1
+          fi
+        env:
+          CODE_FROM_CHECK: $(CodeFromCheck)
+          DOCS_FROM_CHECK: $(DocsFromCheck)
+        displayName: Assert downstream output propagation

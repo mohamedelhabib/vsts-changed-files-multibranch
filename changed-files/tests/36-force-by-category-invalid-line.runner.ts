@@ -6,7 +6,7 @@ runScenario({
         "forceByCategory": "Code: true\nDocs"
     },
     "exec": {
-        "log -m -1 --name-only --pretty=format: latest_commit_id": {
+        "log --first-parent -m -1 --relative --no-renames --name-only --pretty=format: --end-of-options latest_commit_id --": {
             "code": 0,
             "stdout": "README.md"
         }

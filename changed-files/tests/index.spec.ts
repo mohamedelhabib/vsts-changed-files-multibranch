@@ -4,7 +4,7 @@ describe("vsts-changed-files-multibranch", () => {
 
     describe("core behaviors", () => {
 
-        test("should works", async () => {
+        test("should work on basic single-commit build", async () => {
             const tr = await runTask("01-base.runner.js");
 
             expect(tr.succeeded).toBe(true);
@@ -17,7 +17,7 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
-        test("should return true because of force", async () => {
+        test("should return true without git or API calls when forceToTrue is enabled", async () => {
             const tr = await runTask("02-force-to-true.js");
 
             expect(tr.succeeded).toBe(true);
@@ -30,12 +30,12 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
-        test("should return true because of force", async () => {
+        test("should short-circuit and return true when forceToTrue is enabled even if globs would not match", async () => {
             const tr = await runTask("02-no-glob-match.runner-force-to-true.js");
 
             expect(tr.succeeded).toBe(true);
 
-            expect(tr.invokedToolCount).toBe(1);
+            expect(tr.invokedToolCount).toBe(0);
             expect(tr.warningIssues).toHaveLength(0);
             expect(tr.errorIssues).toHaveLength(0);
 
@@ -61,7 +61,7 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
-        test("should return TestsChanged and CodeChanged to true because of force despite previous build used same sourceVersion", async () => {
+        test("should return false if previous build used same sourceVersion", async () => {
             const tr = await runTask("03-same-source-version.runner.js");
 
             expect(tr.succeeded).toBe(true);
@@ -74,7 +74,7 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
-        test("should return false if previous build used same sourceVersion", async () => {
+        test("should return TestsChanged and CodeChanged to true because of force despite previous build used same sourceVersion", async () => {
             const tr = await runTask("03-same-source-version.with-force-by-category.js");
 
             expect(tr.succeeded).toBe(true);
@@ -117,7 +117,7 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
-        test("should return ignore exclusion", async () => {
+        test("should apply exclusion and return false when only excluded file changed", async () => {
             const tr = await runTask("05.1-glob-match.exclusion.runner.js");
 
             expect(tr.succeeded).toBe(true);
@@ -130,7 +130,7 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
-        test("should return ignore exclusion and detect changes", async () => {
+        test("should apply exclusion and detect other matching changes", async () => {
             const tr = await runTask("05.2-glob-match.exclusion.runner.js");
 
             expect(tr.succeeded).toBe(true);
@@ -143,12 +143,12 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stderr).toBeFalsy();
         });
 
-        test("should return true if one of the changes match", async () => {
+        test("should batch multiple build commits into one git invocation and return true if any match", async () => {
             const tr = await runTask("06-several-build-changes.js");
 
             expect(tr.succeeded).toBe(true);
 
-            expect(tr.invokedToolCount).toBe(2);
+            expect(tr.invokedToolCount).toBe(1);
             expect(tr.warningIssues).toHaveLength(0);
             expect(tr.errorIssues).toHaveLength(0);
 
@@ -235,8 +235,8 @@ describe("vsts-changed-files-multibranch", () => {
             expect(tr.stdout).toContain("##vso[task.setvariable variable=CodeChanged;isOutput=true;]true");
             expect(tr.stdout).toContain("##vso[task.setvariable variable=TestsChanged;isOutput=true;]false");
 
-            expect(tr.stdout).not.toContain("##vso[task.setvariable variable=HasChanged;isOutput=true;]");
-            expect(tr.stdout).not.toContain("##vso[task.setvariable variable=DocumentationChanged;isOutput=true;]true");
+            expect(tr.stdout).not.toContain("##vso[task.setvariable variable=HasChanged;");
+            expect(tr.stdout).not.toContain("##vso[task.setvariable variable=DocumentationChanged;");
 
             expect(tr.stderr).toBeFalsy();
         });

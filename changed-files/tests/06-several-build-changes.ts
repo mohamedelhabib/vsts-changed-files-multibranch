@@ -23,13 +23,9 @@ tmr.setAnswers({
         "/bin/git": true
     },
     exec: {
-        "/bin/git -c core.quotePath=false log -m -1 --name-only --pretty=format: latest_commit_id": {
+        "/bin/git -c core.quotePath=false log --no-walk --first-parent -m --relative --no-renames --name-only --pretty=format: --end-of-options latest_commit_id latest_commit_id_1 --": {
             code: 0,
-            stdout: "test/file1.ts\ntest/file2.ts\ndocs/index.md"
-        },
-        "/bin/git -c core.quotePath=false log -m -1 --name-only --pretty=format: latest_commit_id_1": {
-            code: 0,
-            stdout: "src/file1.ts\nsrc/file2.ts\ndocs/index.md"
+            stdout: "test/file1.ts\ntest/file2.ts\ndocs/index.md\nsrc/file1.ts\nsrc/file2.ts\ndocs/index.md"
         }
     }
 });

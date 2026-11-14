@@ -7,7 +7,7 @@ runScenario({
     },
     "sourceBranch": "refs/pull/12/merge",
     "exec": {
-        "diff --name-only origin/master...": {
+        "diff --relative --no-renames --name-only --end-of-options origin/master... --": {
             "code": 0,
             "stdout": "docs/a.md"
         }
