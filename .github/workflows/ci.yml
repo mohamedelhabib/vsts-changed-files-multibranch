@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    tags-ignore:
+    branches:
       - '**'
   pull_request:
 
@@ -64,3 +64,4 @@ jobs:
         with:
           name: vsix
           path: vsts-changed-files-multibranch.vsix
+          retention-days: 7
